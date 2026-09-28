@@ -1,0 +1,719 @@
+<title>Brief Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root{
+  --bg:#F3F4F1; --surface:#FFFFFF; --surface-2:#F8F9F6; --ink:#1A2320; --muted:#5B6863; --faint:#8A9691;
+  --line:#DCE1DC; --line-strong:#C3CBC5;
+  --accent:#1D6B57; --accent-ink:#FFFFFF; --accent-soft:#E2EFEA;
+  --focus:#2E63C9;
+  --st-new:#2E63C9; --st-new-bg:#E4ECFB;
+  --st-acc:#1B8A64; --st-acc-bg:#DFF2EA;
+  --st-prog:#A8650E; --st-prog-bg:#FBEEDC;
+  --st-rev:#6B4FBF; --st-rev-bg:#ECE7FA;
+  --st-done:#4A5B55; --st-done-bg:#E6EAE7;
+  --st-dec:#B23A31; --st-dec-bg:#F8E3E1;
+  --weekend:#EEF0EC; --today:#FFF4D6;
+  --shadow:0 12px 40px rgba(20,35,30,.18);
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#121715; --surface:#1A211E; --surface-2:#161C1A; --ink:#E6ECE9; --muted:#9FADA7; --faint:#72807A;
+    --line:#2A3430; --line-strong:#3A4641;
+    --accent:#4FB596; --accent-ink:#0E1A16; --accent-soft:#1E3A31;
+    --focus:#7FA6F0;
+    --st-new:#86A9F0; --st-new-bg:#1E2B45;
+    --st-acc:#5CC79E; --st-acc-bg:#173328;
+    --st-prog:#E3A553; --st-prog-bg:#3A2A14;
+    --st-rev:#AE98F0; --st-rev-bg:#2A2342;
+    --st-done:#A9B7B1; --st-done-bg:#26302C;
+    --st-dec:#EC8A82; --st-dec-bg:#3D1F1C;
+    --weekend:#171E1B; --today:#3A3217;
+    --shadow:0 12px 40px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#121715; --surface:#1A211E; --surface-2:#161C1A; --ink:#E6ECE9; --muted:#9FADA7; --faint:#72807A;
+  --line:#2A3430; --line-strong:#3A4641;
+  --accent:#4FB596; --accent-ink:#0E1A16; --accent-soft:#1E3A31;
+  --focus:#7FA6F0;
+  --st-new:#86A9F0; --st-new-bg:#1E2B45;
+  --st-acc:#5CC79E; --st-acc-bg:#173328;
+  --st-prog:#E3A553; --st-prog-bg:#3A2A14;
+  --st-rev:#AE98F0; --st-rev-bg:#2A2342;
+  --st-done:#A9B7B1; --st-done-bg:#26302C;
+  --st-dec:#EC8A82; --st-dec-bg:#3D1F1C;
+  --weekend:#171E1B; --today:#3A3217;
+  --shadow:0 12px 40px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.5}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:20px;padding-block:0 64px}
+@media (max-width:480px){.wrap{padding-inline:16px}}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.mono{font-family:var(--mono);font-size:12px;letter-spacing:.02em}
+
+/* header */
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-block:28px 16px;border-bottom:1px solid var(--line)}
+.brand h1{font-size:30px;line-height:1.1}
+.brand p{margin:4px 0 0;color:var(--muted);max-width:60ch}
+.tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:4px}
+.tab{border:0;background:none;padding:8px 14px;border-radius:7px;cursor:pointer;font-weight:500;color:var(--muted);display:flex;align-items:center;gap:8px}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+.tab .badge{background:var(--st-new);color:#fff;border-radius:99px;font-size:11px;padding:0 7px;line-height:18px;font-weight:600}
+.tab[aria-selected="true"] .badge{background:var(--accent-ink);color:var(--accent)}
+.banner{margin-top:16px;padding:10px 14px;border-radius:8px;background:var(--st-prog-bg);color:var(--ink);border:1px solid var(--line)}
+section.view{padding-top:24px}
+
+/* form */
+.form-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:32px;align-items:start}
+@media (max-width:900px){.form-grid{grid-template-columns:1fr}}
+.brief{display:flex;flex-direction:column;gap:20px}
+fieldset{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:20px;margin:0;min-width:0}
+legend{font-family:var(--display);font-weight:600;font-size:17px;padding:0 6px;display:flex;align-items:baseline;gap:8px}
+legend .step{font-family:var(--mono);font-size:12px;color:var(--accent)}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 18px}
+@media (max-width:640px){.fields{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field.full{grid-column:1/-1}
+.field label,.field .lbl{font-weight:500;font-size:13px}
+.req{color:var(--st-dec);margin-left:2px}
+.hint{color:var(--muted);font-size:12px}
+input[type=text],input[type=email],input[type=date],input[type=number],input[type=search],select,textarea{
+  width:100%;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:8px;padding:9px 11px;min-height:40px}
+textarea{min-height:84px;resize:vertical}
+input:focus,select:focus,textarea:focus{border-color:var(--focus);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 22%,transparent)}
+.field .err{display:none;color:var(--st-dec);font-size:12px;font-weight:500}
+.field.invalid .err{display:block}
+.field.invalid input,.field.invalid select,.field.invalid textarea,.field.invalid .checks{border-color:var(--st-dec)}
+.checks{display:flex;flex-wrap:wrap;gap:8px;border:1px solid transparent;border-radius:8px;padding:2px}
+.check{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-strong);border-radius:99px;padding:5px 12px 5px 9px;cursor:pointer;background:var(--surface-2);font-size:13px}
+.check input{accent-color:var(--accent);margin:0}
+.check:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.aside{position:sticky;top:16px;display:flex;flex-direction:column;gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.card h3{font-size:15px;margin-bottom:8px}
+.card ul{margin:0;padding-left:18px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.leadtime{font-family:var(--display);font-size:28px;font-weight:700;line-height:1}
+.leadtime small{font-family:var(--body);font-size:13px;font-weight:400;color:var(--muted);margin-left:4px}
+.flag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--st-dec);background:var(--st-dec-bg);padding:1px 7px;border-radius:4px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid var(--line-strong);background:var(--surface);padding:9px 16px;border-radius:8px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--st-dec);border-color:color-mix(in srgb,var(--st-dec) 45%,transparent)}
+.btn.small{padding:6px 11px;font-size:13px}
+.btn:disabled{opacity:.55;cursor:default}
+.errsum{display:none;padding:10px 14px;border-radius:8px;background:var(--st-dec-bg);color:var(--ink);border:1px solid color-mix(in srgb,var(--st-dec) 40%,transparent)}
+.errsum.show{display:block}
+.done{max-width:620px}
+.done .mono{font-size:15px;color:var(--accent)}
+
+/* list */
+.summary{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.sumpill{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:5px 12px 5px 6px;cursor:pointer}
+.sumpill[aria-pressed="true"]{border-color:var(--ink)}
+.sumpill b{font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:12px;min-width:22px;text-align:center;border-radius:99px;padding:1px 6px}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.toolbar > *{flex:1 1 160px;max-width:260px}
+.toolbar input[type=search]{flex:2 1 220px;max-width:none}
+.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:900px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--surface-2)}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:0}
+td .t{font-weight:600}
+td .sub{color:var(--muted);font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:99px;padding:2px 10px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.s-New{color:var(--st-new);background:var(--st-new-bg)}
+.s-Accepted{color:var(--st-acc);background:var(--st-acc-bg)}
+.s-In-progress{color:var(--st-prog);background:var(--st-prog-bg)}
+.s-In-review{color:var(--st-rev);background:var(--st-rev-bg)}
+.s-Delivered{color:var(--st-done);background:var(--st-done-bg)}
+.s-Declined{color:var(--st-dec);background:var(--st-dec-bg)}
+.sw{display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--c);margin-right:7px;vertical-align:1px}
+.tags{display:flex;flex-wrap:wrap;gap:4px}
+.tag{font-size:11.5px;border:1px solid var(--line-strong);border-radius:4px;padding:0 6px;white-space:nowrap}
+.prio-Urgent{color:var(--st-dec);font-weight:600}
+.prio-High{color:var(--st-prog);font-weight:600}
+.sample{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);border:1px dashed var(--line-strong);border-radius:4px;padding:0 5px;margin-left:6px;vertical-align:1px}
+.empty{padding:40px 20px;text-align:center;color:var(--muted)}
+
+/* calendar */
+.calbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin-bottom:14px}
+.month{display:flex;align-items:center;gap:6px}
+.month h2{font-size:22px;min-width:190px}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;padding:7px 12px;cursor:pointer;font-weight:500;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.seg-label{font-size:12px;color:var(--muted);margin-right:4px}
+.calbar select{width:auto;min-height:36px;padding:6px 10px}
+.calbar .chk{display:inline-flex;gap:6px;align-items:center;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:12px;font-size:12.5px;color:var(--muted)}
+.legend .key{display:inline-flex;align-items:center}
+.legend .note{margin-left:auto}
+.scroller{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.mgrid{display:grid;grid-template-columns:repeat(7,minmax(110px,1fr));min-width:770px}
+.mgrid .dow{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.cell{min-height:112px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:6px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.cell:nth-child(7n){border-right:0}
+.cell.out{background:var(--surface-2)}
+.cell.out .dn{color:var(--faint)}
+.cell.wk{background:var(--weekend)}
+.cell.today .dn{background:var(--accent);color:var(--accent-ink);border-radius:99px}
+.dn{font-family:var(--mono);font-size:12px;align-self:flex-start;padding:1px 7px;font-variant-numeric:tabular-nums}
+.chip{display:block;width:100%;text-align:left;border:1.5px solid var(--c);background:var(--c);color:#fff;border-radius:5px;padding:1px 6px;font-size:12px;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.chip.pending{background:color-mix(in srgb,var(--c) 12%,var(--surface));color:var(--ink);border-style:dashed}
+.chip.declined{opacity:.55;text-decoration:line-through}
+.tl{display:grid;min-width:960px}
+.tl .h{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;padding:6px 0;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.tl .h.wk{color:var(--faint)}
+.tl .h.today{background:var(--today);color:var(--ink)}
+.tl .lab{padding:6px 12px;font-weight:600;font-size:13px;border-right:1px solid var(--line);position:sticky;left:0;background:var(--surface);z-index:1;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tl .lab.cont{font-weight:400}
+.tl .grp{border-top:1px solid var(--line)}
+.tl .bar{margin:4px 1px;align-self:center;z-index:0}
+.tl .bg{border-left:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
+.tl .bg.wk{background:var(--weekend)}
+.tl .bg.today{background:var(--today)}
+
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgba(10,18,15,.42);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);z-index:21;box-shadow:var(--shadow);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.dhead{padding:18px 22px 14px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
+.dhead h2{font-size:21px;line-height:1.2}
+.dhead .x{margin-left:auto;flex:none}
+.dbody{overflow-y:auto;padding:18px 22px 28px;display:flex;flex-direction:column;gap:22px}
+.dl{display:grid;grid-template-columns:130px minmax(0,1fr);gap:8px 14px;margin:0}
+.dl dt{color:var(--muted);font-size:12.5px}
+.dl dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.dsec h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-family:var(--body);font-weight:600;margin-bottom:10px}
+.exec{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:var(--st-dec);font-weight:500}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;z-index:40;max-width:calc(100% - 32px);box-shadow:var(--shadow)}
+@media (prefers-reduced-motion:no-preference){.drawer{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Brief Desk</h1>
+      <p>Marketing submits a brief. The execution team reviews it, accepts it, and schedules the work.</p>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button class="tab" role="tab" id="tab-form" data-tab="form" aria-selected="true">New brief</button>
+      <button class="tab" role="tab" id="tab-requests" data-tab="requests" aria-selected="false">Requests <span class="badge" id="newBadge" hidden>0</span></button>
+      <button class="tab" role="tab" id="tab-calendar" data-tab="calendar" aria-selected="false">Calendar</button>
+    </nav>
+  </header>
+  <div class="banner" id="localBanner" hidden>Shared storage isn't available in this view, so requests you add here stay in this tab only and disappear when you close it.</div>
+
+  <!-- FORM -->
+  <section class="view" id="view-form">
+    <div class="form-grid">
+      <form class="brief" id="briefForm" novalidate>
+        <div class="errsum" id="errSummary" role="alert"></div>
+        <fieldset>
+          <legend><span class="step">1</span>Requester</legend>
+          <div class="fields">
+            <div class="field"><label for="f-requester">Your name<span class="req">*</span></label><input type="text" id="f-requester" name="requester" required autocomplete="name"><span class="err">Enter your name.</span></div>
+            <div class="field"><label for="f-email">Work email<span class="req">*</span></label><input type="email" id="f-email" name="email" required autocomplete="email"><span class="err">Enter a valid email address.</span></div>
+            <div class="field"><label for="f-team">Marketing team<span class="req">*</span></label><select id="f-team" name="team" required></select><span class="err">Choose the team making the request.</span></div>
+            <div class="field"><label for="f-approver">Final approver<span class="req">*</span></label><input type="text" id="f-approver" name="approver" required><span class="hint">Who signs off on the finished work.</span><span class="err">Name the person who approves the work.</span></div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend><span class="step">2</span>Request</legend>
+          <div class="fields">
+            <div class="field full"><label for="f-title">Campaign or request name<span class="req">*</span></label><input type="text" id="f-title" name="title" required maxlength="120" placeholder="e.g. Q4 Holiday Gift Guide"><span class="err">Give the request a name.</span></div>
+            <div class="field"><label for="f-type">Request type<span class="req">*</span></label><select id="f-type" name="type" required></select><span class="err">Choose a request type.</span></div>
+            <div class="field"><label for="f-priority">Priority<span class="req">*</span></label><select id="f-priority" name="priority" required></select><span class="err">Choose a priority.</span></div>
+            <div class="field full"><span class="lbl" id="ch-lbl">Channels<span class="req">*</span></span><div class="checks" id="f-channels" role="group" aria-labelledby="ch-lbl"></div><span class="err">Pick at least one channel.</span></div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend><span class="step">3</span>Creative brief</legend>
+          <div class="fields">
+            <div class="field full"><label for="f-objective">Business objective<span class="req">*</span></label><textarea id="f-objective" name="objective" required placeholder="What should this achieve, and why now?"></textarea><span class="err">Describe the objective.</span></div>
+            <div class="field"><label for="f-audience">Target audience<span class="req">*</span></label><textarea id="f-audience" name="audience" required placeholder="Segment, persona, region"></textarea><span class="err">Describe the audience.</span></div>
+            <div class="field"><label for="f-message">Key message<span class="req">*</span></label><textarea id="f-message" name="message" required placeholder="The one thing they should take away"></textarea><span class="err">Add the key message.</span></div>
+            <div class="field full"><label for="f-deliverables">Deliverables and specs<span class="req">*</span></label><textarea id="f-deliverables" name="deliverables" required placeholder="List each asset with format and size, e.g. 3 × Instagram story 1080×1920"></textarea><span class="err">List the deliverables.</span></div>
+            <div class="field full"><label for="f-kpis">Success metrics<span class="req">*</span></label><input type="text" id="f-kpis" name="kpis" required placeholder="e.g. 4% CTR, 1,200 sign-ups"><span class="err">Say how success will be measured.</span></div>
+            <div class="field full"><label for="f-links">Reference links and assets</label><textarea id="f-links" name="links" placeholder="Brand guidelines, past campaigns, shared folders"></textarea></div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend><span class="step">4</span>Timing and budget</legend>
+          <div class="fields">
+            <div class="field"><label for="f-start">Go-live date<span class="req">*</span></label><input type="date" id="f-start" name="startDate" required><span class="err" id="startErr">Choose a go-live date.</span></div>
+            <div class="field"><label for="f-end">End date</label><input type="date" id="f-end" name="endDate"><span class="hint">Leave blank for a one-day drop.</span><span class="err">The end date must be on or after the go-live date.</span></div>
+            <div class="field"><label for="f-budget">Budget (USD)</label><input type="number" id="f-budget" name="budget" min="0" step="100" inputmode="numeric"></div>
+            <div class="field full"><label for="f-notes">Anything else</label><textarea id="f-notes" name="notes" placeholder="Dependencies, legal review, stakeholders to loop in"></textarea></div>
+          </div>
+        </fieldset>
+
+        <div class="actions">
+          <button type="submit" class="btn primary" id="submitBtn">Submit brief</button>
+          <button type="reset" class="btn">Clear form</button>
+          <span class="hint">Fields marked <span class="req">*</span> are required.</span>
+        </div>
+      </form>
+
+      <aside class="aside">
+        <div class="card">
+          <h3>Lead time</h3>
+          <div class="leadtime" id="leadtime">–<small>business days</small></div>
+          <p class="hint" id="leadnote" style="margin:8px 0 0">Pick a go-live date to see how much time the team has.</p>
+        </div>
+        <div class="card">
+          <h3>Before you submit</h3>
+          <ul>
+            <li>Allow 10 business days for new creative. Shorter briefs are flagged as rush.</li>
+            <li>Name one final approver. Feedback from others goes through them.</li>
+            <li>Link final copy and brand assets if you have them.</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+    <div class="card done" id="doneCard" hidden>
+      <h3>Brief received</h3>
+      <p>Your request <span class="mono" id="doneId"></span> is in the queue as <b>New</b>. The execution team will review it and add an owner and due date.</p>
+      <div class="actions">
+        <button class="btn primary" id="anotherBtn" type="button">Submit another brief</button>
+        <button class="btn" id="viewReqBtn" type="button">View requests</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- REQUESTS -->
+  <section class="view" id="view-requests" hidden>
+    <div class="summary" id="summary"></div>
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="Search by name, ID, requester or owner" aria-label="Search requests">
+      <select id="fStatus" aria-label="Status"></select>
+      <select id="fTeam" aria-label="Team"></select>
+      <select id="fChannel" aria-label="Channel"></select>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>ID</th><th>Request</th><th>Team</th><th>Channels</th><th>Go-live</th><th>Priority</th><th>Status</th><th>Owner</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="empty" id="listEmpty" hidden></div>
+    </div>
+  </section>
+
+  <!-- CALENDAR -->
+  <section class="view" id="view-calendar" hidden>
+    <div class="calbar">
+      <div class="month">
+        <button class="btn small" id="prevM" aria-label="Previous month">‹</button>
+        <button class="btn small" id="todayM">Today</button>
+        <button class="btn small" id="nextM" aria-label="Next month">›</button>
+        <h2 id="monthLabel"></h2>
+      </div>
+      <div><span class="seg-label">View</span><span class="seg" id="segView"><button data-v="month" aria-pressed="true">Month</button><button data-v="timeline" aria-pressed="false">Timeline</button></span></div>
+      <div><span class="seg-label">By</span><span class="seg" id="segBy"><button data-v="team" aria-pressed="true">Team</button><button data-v="channel" aria-pressed="false">Channel</button></span></div>
+      <select id="cTeam" aria-label="Filter calendar by team"></select>
+      <select id="cChannel" aria-label="Filter calendar by channel"></select>
+      <label class="chk"><input type="checkbox" id="cHideDec" checked> Hide declined</label>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="scroller" id="calHost"></div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-modal="true" role="dialog" aria-labelledby="dTitle"></aside>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script>
+const TEAMS = ["Brand","Product Marketing","Growth","Content","Lifecycle & CRM","Social","Events","Partnerships","Communications"];
+const CHANNELS = ["Email","Organic Social","Paid Social","Paid Search","Display","Website","Video","Events","Print & OOH","PR","SMS & Push","Partner"];
+const TYPES = ["New campaign","Product launch","Asset refresh","Evergreen content","Event support","Other"];
+const PRIORITIES = ["Low","Medium","High","Urgent"];
+const STATUSES = ["New","Accepted","In progress","In review","Delivered","Declined"];
+const OPEN = ["New","Accepted","In progress","In review"];
+const PALETTE = ["#2E63C9","#C4621B","#1B8A64","#B53C73","#6B4FBF","#8F7010","#1F819A","#7D5A3F","#C23B32","#4F7A1F","#53627A","#A0478F"];
+const RUSH_DAYS = 10;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const stCls = s => "s-" + String(s).replace(/\s+/g,"-");
+function colorFor(dim, v){ const l = dim === "team" ? TEAMS : CHANNELS; const i = l.indexOf(v); return PALETTE[(i < 0 ? l.length : i) % PALETTE.length]; }
+function parseD(s){ if(!s) return null; const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); }
+function iso(d){ return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+function fmt(s){ const d = parseD(s); return d ? d.toLocaleDateString(undefined,{month:"short",day:"numeric",year: d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined}) : "–"; }
+function today0(){ const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }
+function bizDays(from, to){ let n = 0; const d = new Date(from); if(to <= from) return 0; while(d < to){ d.setDate(d.getDate()+1); const w = d.getDay(); if(w !== 0 && w !== 6) n++; } return n; }
+function endOf(r){ return r.endDate && r.endDate >= r.startDate ? r.endDate : r.startDate; }
+function opts(el, list, allLabel){ el.innerHTML = (allLabel ? `<option value="">${esc(allLabel)}</option>` : `<option value="" disabled selected>Select…</option>`) + list.map(v => `<option>${esc(v)}</option>`).join(""); }
+
+const state = {
+  requests: [], db: null, loaded: false, local: false,
+  tab: "form",
+  f: { q: "", status: "", team: "", channel: "" },
+  cal: { month: (() => { const t = today0(); return new Date(t.getFullYear(), t.getMonth(), 1); })(), view: "month", by: "team", team: "", channel: "", hideDec: true },
+  openId: null, dirty: false
+};
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3800); }
+function errMsg(e){
+  const c = e && e.code;
+  if(c === "invalid_argument") return "You can view this tracker but not change it. Ask the owner to make you a Contributor.";
+  if(c === "quota_exceeded") return "The tracker is full. Delete old requests before adding new ones.";
+  if(c === "revoked") return "Your access to this tracker changed. Reload the page.";
+  return "Couldn't save. Check your connection and try again.";
+}
+
+/* ---------- storage ---------- */
+async function writeReq(id, data, merge){
+  if(state.db){
+    const ref = state.db.collection("requests").doc(id);
+    try { merge ? await ref.update(data) : await ref.set(data); return true; }
+    catch(e){ if(e && e.code === "unavailable"){ try { await new Promise(r => setTimeout(r, 400 + Math.random()*600)); merge ? await ref.update(data) : await ref.set(data); return true; } catch(e2){ toast(errMsg(e2)); return false; } } toast(errMsg(e)); return false; }
+  }
+  const i = state.requests.findIndex(r => r.id === id);
+  if(i >= 0) state.requests[i] = merge ? {...state.requests[i], ...data} : {id, ...data};
+  else state.requests.push({id, ...data});
+  renderAll(); return true;
+}
+async function deleteReq(id){
+  if(state.db){ try { await state.db.collection("requests").doc(id).delete(); return true; } catch(e){ toast(errMsg(e)); return false; } }
+  state.requests = state.requests.filter(r => r.id !== id); renderAll(); return true;
+}
+function newId(){
+  const d = new Date(); const a = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let s = "";
+  for(let i = 0; i < 3; i++) s += a[Math.floor(Math.random()*a.length)];
+  return "BR-" + String(d.getMonth()+1).padStart(2,"0") + String(d.getDate()).padStart(2,"0") + "-" + s;
+}
+
+/* ---------- tabs ---------- */
+function setTab(t){
+  state.tab = t;
+  document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+  ["form","requests","calendar"].forEach(v => $("#view-"+v).hidden = v !== t);
+  try { history.replaceState(null, "", "#" + t); } catch(e){}
+  if(t === "requests") renderList();
+  if(t === "calendar") renderCal();
+}
+document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+
+/* ---------- form ---------- */
+opts($("#f-team"), TEAMS); opts($("#f-type"), TYPES); opts($("#f-priority"), PRIORITIES);
+$("#f-channels").innerHTML = CHANNELS.map((c,i) => `<label class="check"><input type="checkbox" id="ch-${i}" value="${esc(c)}"> ${esc(c)}</label>`).join("");
+const form = $("#briefForm");
+
+function updateLead(){
+  const s = parseD($("#f-start").value), el = $("#leadtime"), note = $("#leadnote");
+  if(!s){ el.innerHTML = "–<small>business days</small>"; note.textContent = "Pick a go-live date to see how much time the team has."; return; }
+  const n = bizDays(today0(), s);
+  el.innerHTML = `${n}<small>business day${n === 1 ? "" : "s"}</small>`;
+  if(s < today0()) note.innerHTML = `<span class="flag">Past date</span> The go-live date has already passed.`;
+  else if(n < RUSH_DAYS) note.innerHTML = `<span class="flag">Rush</span> Under ${RUSH_DAYS} business days. The team may need to cut scope.`;
+  else note.textContent = "Standard lead time.";
+}
+$("#f-start").addEventListener("input", updateLead);
+
+function validate(){
+  const bad = [];
+  form.querySelectorAll(".field").forEach(f => f.classList.remove("invalid"));
+  form.querySelectorAll("[required]").forEach(el => {
+    let ok = el.value.trim() !== "";
+    if(ok && el.type === "email") ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(el.value.trim());
+    if(!ok){ el.closest(".field").classList.add("invalid"); bad.push(el); }
+  });
+  const chk = $("#f-channels");
+  if(!chk.querySelector("input:checked")){ chk.closest(".field").classList.add("invalid"); bad.push(chk.querySelector("input")); }
+  const s = $("#f-start").value, e = $("#f-end").value;
+  if(s && e && e < s){ $("#f-end").closest(".field").classList.add("invalid"); bad.push($("#f-end")); }
+  return bad;
+}
+form.addEventListener("input", ev => { const f = ev.target.closest(".field"); if(f && f.classList.contains("invalid")) validate(); });
+form.addEventListener("change", ev => { const f = ev.target.closest(".field"); if(f && f.classList.contains("invalid")) validate(); });
+form.addEventListener("reset", () => { setTimeout(() => { form.querySelectorAll(".field").forEach(f => f.classList.remove("invalid")); $("#errSummary").classList.remove("show"); updateLead(); }, 0); });
+
+form.addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const bad = validate(), sum = $("#errSummary");
+  if(bad.length){
+    sum.textContent = `${bad.length} required field${bad.length === 1 ? " needs" : "s need"} attention before this brief can be submitted.`;
+    sum.classList.add("show"); bad[0].focus(); return;
+  }
+  sum.classList.remove("show");
+  const v = id => $(id).value.trim();
+  const start = v("#f-start");
+  const data = {
+    title: v("#f-title"), requester: v("#f-requester"), email: v("#f-email"), team: v("#f-team"), approver: v("#f-approver"),
+    type: v("#f-type"), priority: v("#f-priority"),
+    channels: [...$("#f-channels").querySelectorAll("input:checked")].map(i => i.value),
+    objective: v("#f-objective"), audience: v("#f-audience"), message: v("#f-message"), deliverables: v("#f-deliverables"),
+    kpis: v("#f-kpis"), links: v("#f-links"), startDate: start, endDate: v("#f-end"),
+    budget: $("#f-budget").value === "" ? null : Number($("#f-budget").value), notes: v("#f-notes"),
+    rush: bizDays(today0(), parseD(start)) < RUSH_DAYS,
+    status: "New", submittedAt: new Date().toISOString(),
+    owner: "", dueDate: "", effort: null, execNotes: "", declineReason: "", acceptedAt: ""
+  };
+  const btn = $("#submitBtn"); btn.disabled = true; btn.textContent = "Submitting…";
+  const id = newId();
+  const ok = await writeReq(id, data, false);
+  btn.disabled = false; btn.textContent = "Submit brief";
+  if(!ok) return;
+  form.reset(); updateLead();
+  $("#doneId").textContent = id;
+  form.closest(".form-grid").hidden = true; $("#doneCard").hidden = false;
+  window.scrollTo({top: 0});
+});
+$("#anotherBtn").addEventListener("click", () => { $("#doneCard").hidden = true; form.closest(".form-grid").hidden = false; $("#f-requester").focus(); });
+$("#viewReqBtn").addEventListener("click", () => { $("#doneCard").hidden = true; form.closest(".form-grid").hidden = false; setTab("requests"); });
+
+/* ---------- list ---------- */
+opts($("#fStatus"), ["Open (not delivered or declined)", ...STATUSES], "All statuses");
+$("#fStatus").options[1].value = "__open";
+opts($("#fTeam"), TEAMS, "All teams"); opts($("#fChannel"), CHANNELS, "All channels");
+$("#q").addEventListener("input", e => { state.f.q = e.target.value.toLowerCase(); renderList(); });
+$("#fStatus").addEventListener("change", e => { state.f.status = e.target.value; renderList(); });
+$("#fTeam").addEventListener("change", e => { state.f.team = e.target.value; renderList(); });
+$("#fChannel").addEventListener("change", e => { state.f.channel = e.target.value; renderList(); });
+
+function listFiltered(){
+  const f = state.f;
+  return state.requests.filter(r => {
+    if(f.status === "__open" && !OPEN.includes(r.status)) return false;
+    if(f.status && f.status !== "__open" && r.status !== f.status) return false;
+    if(f.team && r.team !== f.team) return false;
+    if(f.channel && !(r.channels || []).includes(f.channel)) return false;
+    if(f.q){ const hay = [r.id, r.title, r.requester, r.owner, r.team].join(" ").toLowerCase(); if(!hay.includes(f.q)) return false; }
+    return true;
+  }).sort((a,b) => ((b.status === "New") - (a.status === "New")) || String(a.startDate).localeCompare(String(b.startDate)));
+}
+
+function renderSummary(){
+  const counts = Object.fromEntries(STATUSES.map(s => [s, 0]));
+  state.requests.forEach(r => { if(counts[r.status] != null) counts[r.status]++; });
+  $("#summary").innerHTML = STATUSES.map(s => `<button class="sumpill" data-s="${esc(s)}" aria-pressed="${state.f.status === s}"><b class="${stCls(s)}">${counts[s]}</b>${esc(s)}</button>`).join("");
+  $("#summary").querySelectorAll(".sumpill").forEach(b => b.addEventListener("click", () => {
+    state.f.status = state.f.status === b.dataset.s ? "" : b.dataset.s; $("#fStatus").value = state.f.status; renderList();
+  }));
+  const nb = $("#newBadge"); nb.textContent = counts.New; nb.hidden = !counts.New;
+}
+
+function renderList(){
+  renderSummary();
+  const rows = listFiltered(), empty = $("#listEmpty");
+  $("#rows").innerHTML = rows.map(r => `
+    <tr data-id="${esc(r.id)}" tabindex="0">
+      <td class="mono">${esc(r.id)}</td>
+      <td><div class="t">${esc(r.title)}${r.example ? '<span class="sample">Sample</span>' : ""}</div><div class="sub">${esc(r.requester)} · ${esc(r.type)}</div></td>
+      <td><span class="sw" style="--c:${colorFor("team", r.team)}"></span>${esc(r.team)}</td>
+      <td><div class="tags">${(r.channels || []).map(c => `<span class="tag">${esc(c)}</span>`).join("")}</div></td>
+      <td style="white-space:nowrap">${fmt(r.startDate)}${r.endDate && r.endDate !== r.startDate ? `<div class="sub">to ${fmt(r.endDate)}</div>` : ""}${r.rush && OPEN.includes(r.status) ? ' <span class="flag">Rush</span>' : ""}</td>
+      <td class="prio-${esc(r.priority)}">${esc(r.priority)}</td>
+      <td><span class="pill ${stCls(r.status)}">${esc(r.status)}</span></td>
+      <td>${r.owner ? esc(r.owner) : '<span class="sub">Unassigned</span>'}</td>
+    </tr>`).join("");
+  $("#rows").querySelectorAll("tr").forEach(tr => {
+    tr.addEventListener("click", () => openDrawer(tr.dataset.id));
+    tr.addEventListener("keydown", e => { if(e.key === "Enter") openDrawer(tr.dataset.id); });
+  });
+  empty.hidden = rows.length > 0;
+  empty.textContent = !state.loaded ? "Loading requests…" : state.requests.length ? "No requests match these filters." : "No requests yet. Briefs submitted from the New brief tab appear here.";
+}
+
+/* ---------- drawer ---------- */
+function openDrawer(id){ state.openId = id; state.dirty = false; renderDrawer(); }
+function closeDrawer(){ state.openId = null; $("#drawer").hidden = true; $("#scrim").hidden = true; }
+$("#scrim").addEventListener("click", closeDrawer);
+document.addEventListener("keydown", e => { if(e.key === "Escape" && state.openId) closeDrawer(); });
+
+function renderDrawer(){
+  const r = state.requests.find(x => x.id === state.openId), d = $("#drawer");
+  if(!r){ closeDrawer(); return; }
+  const row = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
+  const isNew = r.status === "New";
+  d.innerHTML = `
+    <div class="dhead">
+      <div>
+        <div class="mono" style="color:var(--muted)">${esc(r.id)} · submitted ${r.submittedAt ? new Date(r.submittedAt).toLocaleDateString() : "–"}</div>
+        <h2 id="dTitle">${esc(r.title)}${r.example ? '<span class="sample">Sample</span>' : ""}</h2>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="pill ${stCls(r.status)}">${esc(r.status)}</span>${r.rush ? '<span class="flag">Rush</span>' : ""}<span class="prio-${esc(r.priority)}">${esc(r.priority)} priority</span></div>
+      </div>
+      <button class="btn small x" id="dClose" aria-label="Close">Close</button>
+    </div>
+    <div class="dbody">
+      <div class="exec" id="execBox">
+        <h3 style="font-family:var(--body);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">${isNew ? "Review this brief" : "Execution"}</h3>
+        <div class="fields">
+          ${isNew ? "" : `<div class="field"><label for="x-status">Status</label><select id="x-status">${STATUSES.map(s => `<option ${s === r.status ? "selected" : ""}>${s}</option>`).join("")}</select></div>`}
+          <div class="field"><label for="x-owner">Owner</label><input type="text" id="x-owner" value="${esc(r.owner)}" placeholder="Who's doing the work"></div>
+          <div class="field"><label for="x-due">Internal due date</label><input type="date" id="x-due" value="${esc(r.dueDate)}"></div>
+          <div class="field"><label for="x-effort">Estimated effort (hours)</label><input type="number" id="x-effort" min="0" step="1" value="${r.effort ?? ""}"></div>
+          <div class="field full"><label for="x-notes">Team notes</label><textarea id="x-notes" placeholder="Scope decisions, dependencies, handoffs">${esc(r.execNotes)}</textarea></div>
+          <div class="field full" id="reasonField" ${r.status === "Declined" || isNew ? "" : "hidden"}><label for="x-reason">Decline reason${isNew ? "" : ""}</label><textarea id="x-reason" placeholder="Required when declining">${esc(r.declineReason)}</textarea><span class="err">Add a reason so the requester knows what to change.</span></div>
+        </div>
+        <div class="actions">
+          ${isNew ? `<button class="btn primary" id="acceptBtn">Accept request</button><button class="btn danger" id="declineBtn">Decline</button>` : `<button class="btn primary" id="saveBtn" disabled>Save changes</button>`}
+        </div>
+      </div>
+      <div class="dsec"><h3>Brief</h3><dl class="dl">
+        ${row("Team", `<span class="sw" style="--c:${colorFor("team", r.team)}"></span>${esc(r.team)}`)}
+        ${row("Type", esc(r.type))}
+        ${row("Channels", `<span class="tags">${(r.channels || []).map(c => `<span class="tag"><span class="sw" style="--c:${colorFor("channel", c)}"></span>${esc(c)}</span>`).join("")}</span>`)}
+        ${row("Go-live", esc(fmt(r.startDate)) + (r.endDate && r.endDate !== r.startDate ? " to " + esc(fmt(r.endDate)) : ""))}
+        ${row("Budget", r.budget != null && r.budget !== "" ? "$" + Number(r.budget).toLocaleString() : "")}
+        ${row("Objective", esc(r.objective))}
+        ${row("Audience", esc(r.audience))}
+        ${row("Key message", esc(r.message))}
+        ${row("Deliverables", esc(r.deliverables))}
+        ${row("Success metrics", esc(r.kpis))}
+        ${row("References", esc(r.links))}
+        ${row("Notes", esc(r.notes))}
+      </dl></div>
+      <div class="dsec"><h3>Requester</h3><dl class="dl">
+        ${row("Name", esc(r.requester))}${row("Email", esc(r.email))}${row("Approver", esc(r.approver))}
+      </dl></div>
+      <div class="dsec" id="delBox"><button class="btn danger small" id="delBtn">Delete request</button></div>
+    </div>`;
+  d.hidden = false; $("#scrim").hidden = false;
+  $("#dClose").addEventListener("click", closeDrawer);
+  const box = $("#execBox");
+  box.addEventListener("input", () => { state.dirty = true; const sb = $("#saveBtn"); if(sb) sb.disabled = false; });
+  const st = $("#x-status");
+  if(st) st.addEventListener("change", () => { $("#reasonField").hidden = st.value !== "Declined"; });
+  const execVals = () => ({ owner: $("#x-owner").value.trim(), dueDate: $("#x-due").value, effort: $("#x-effort").value === "" ? null : Number($("#x-effort").value), execNotes: $("#x-notes").value.trim(), declineReason: $("#x-reason").value.trim() });
+  const needReason = () => { if(!$("#x-reason").value.trim()){ $("#reasonField").hidden = false; $("#reasonField").classList.add("invalid"); $("#x-reason").focus(); return true; } return false; };
+  const commit = async (patch, msg) => { const ok = await writeReq(r.id, patch, true); if(ok){ state.dirty = false; toast(msg); if(state.local) renderDrawer(); } };
+  if(isNew){
+    $("#acceptBtn").addEventListener("click", () => commit({...execVals(), declineReason: "", status: "Accepted", acceptedAt: new Date().toISOString()}, `Accepted ${r.id}`));
+    $("#declineBtn").addEventListener("click", () => { if(needReason()) return; commit({...execVals(), status: "Declined"}, `Declined ${r.id}`); });
+  } else {
+    $("#saveBtn").addEventListener("click", () => {
+      const s = $("#x-status").value;
+      if(s === "Declined" && needReason()) return;
+      commit({...execVals(), status: s}, "Changes saved");
+    });
+  }
+  $("#delBtn").addEventListener("click", () => {
+    $("#delBox").innerHTML = `<div class="confirm">Delete ${esc(r.id)} for everyone? <button class="btn danger small" id="delYes">Delete</button><button class="btn small" id="delNo">Keep it</button></div>`;
+    $("#delNo").addEventListener("click", renderDrawer);
+    $("#delYes").addEventListener("click", async () => { if(await deleteReq(r.id)){ closeDrawer(); toast(`Deleted ${r.id}`); } });
+  });
+}
+
+/* ---------- calendar ---------- */
+opts($("#cTeam"), TEAMS, "All teams"); opts($("#cChannel"), CHANNELS, "All channels");
+$("#cTeam").addEventListener("change", e => { state.cal.team = e.target.value; renderCal(); });
+$("#cChannel").addEventListener("change", e => { state.cal.channel = e.target.value; renderCal(); });
+$("#cHideDec").addEventListener("change", e => { state.cal.hideDec = e.target.checked; renderCal(); });
+const shiftM = n => { const m = state.cal.month; state.cal.month = new Date(m.getFullYear(), m.getMonth()+n, 1); renderCal(); };
+$("#prevM").addEventListener("click", () => shiftM(-1));
+$("#nextM").addEventListener("click", () => shiftM(1));
+$("#todayM").addEventListener("click", () => { const t = today0(); state.cal.month = new Date(t.getFullYear(), t.getMonth(), 1); renderCal(); });
+function seg(id, key){ $(id).querySelectorAll("button").forEach(b => b.addEventListener("click", () => { state.cal[key] = b.dataset.v; renderCal(); })); }
+seg("#segView", "view"); seg("#segBy", "by");
+
+function calFiltered(){
+  const c = state.cal;
+  return state.requests.filter(r => r.startDate && (!c.hideDec || r.status !== "Declined") && (!c.team || r.team === c.team) && (!c.channel || (r.channels || []).includes(c.channel)))
+    .sort((a,b) => a.startDate.localeCompare(b.startDate) || String(a.title).localeCompare(String(b.title)));
+}
+function chipCls(r){ return "chip" + (r.status === "New" ? " pending" : "") + (r.status === "Declined" ? " declined" : ""); }
+function chipColor(r){ const c = state.cal; if(c.by === "team") return colorFor("team", r.team); const ch = (r.channels || []).find(x => !c.channel || x === c.channel) || (r.channels || [])[0]; return colorFor("channel", ch); }
+function chipTitle(r){ return `${r.id} · ${r.title} · ${r.team} · ${(r.channels || []).join(", ")} · ${r.status}`; }
+
+function renderCal(){
+  const c = state.cal, m = c.month;
+  $("#monthLabel").textContent = m.toLocaleDateString(undefined, {month: "long", year: "numeric"});
+  $("#segView").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === c.view)));
+  $("#segBy").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === c.by)));
+  const reqs = calFiltered();
+  const mStart = iso(m), mEnd = iso(new Date(m.getFullYear(), m.getMonth()+1, 0));
+  const inMonth = reqs.filter(r => r.startDate <= mEnd && endOf(r) >= mStart);
+  const dims = c.by === "team" ? TEAMS : CHANNELS;
+  const used = new Set(inMonth.flatMap(r => c.by === "team" ? [r.team] : (r.channels || [])));
+  $("#legend").innerHTML = dims.filter(d => used.has(d)).map(d => `<span class="key"><span class="sw" style="--c:${colorFor(c.by, d)}"></span>${esc(d)}</span>`).join("")
+    + `<span class="note">Solid = accepted · dashed = awaiting review · ${inMonth.length} request${inMonth.length === 1 ? "" : "s"} this month</span>`;
+  c.view === "month" ? renderMonth(reqs, m) : renderTimeline(inMonth, m);
+  $("#calHost").querySelectorAll("[data-id]").forEach(b => b.addEventListener("click", () => openDrawer(b.dataset.id)));
+}
+
+function renderMonth(reqs, m){
+  const first = new Date(m.getFullYear(), m.getMonth(), 1);
+  const start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7));
+  const last = new Date(m.getFullYear(), m.getMonth()+1, 0);
+  const t = iso(today0());
+  let html = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d => `<div class="dow">${d}</div>`).join("");
+  const d = new Date(start);
+  while(d <= last || (d.getDay() + 6) % 7 !== 0){
+    const s = iso(d), dow = d.getDay();
+    const items = reqs.filter(r => r.startDate <= s && endOf(r) >= s);
+    const cls = ["cell", d.getMonth() !== m.getMonth() ? "out" : (dow === 0 || dow === 6 ? "wk" : ""), s === t ? "today" : ""].join(" ");
+    html += `<div class="${cls}"><span class="dn">${d.getDate()}</span>${items.map(r => `<button class="${chipCls(r)}" style="--c:${chipColor(r)}" data-id="${esc(r.id)}" title="${esc(chipTitle(r))}">${r.startDate === s || dow === 1 ? "" : "↳ "}${esc(r.title)}</button>`).join("")}</div>`;
+    d.setDate(d.getDate()+1);
+  }
+  $("#calHost").innerHTML = `<div class="mgrid">${html}</div>`;
+}
+
+function renderTimeline(inMonth, m){
+  const c = state.cal, n = new Date(m.getFullYear(), m.getMonth()+1, 0).getDate(), t = iso(today0());
+  const cols = `grid-template-columns:minmax(150px,190px) repeat(${n}, minmax(26px,1fr))`;
+  const dayMeta = Array.from({length: n}, (_, i) => { const d = new Date(m.getFullYear(), m.getMonth(), i+1); return {s: iso(d), wk: d.getDay() === 0 || d.getDay() === 6, n: i+1}; });
+  let html = `<div class="h" style="grid-column:1;text-align:left;padding-left:12px">${c.by === "team" ? "Team" : "Channel"}</div>` + dayMeta.map(x => `<div class="h ${x.wk ? "wk" : ""} ${x.s === t ? "today" : ""}">${x.n}</div>`).join("");
+  const dims = (c.by === "team" ? TEAMS : CHANNELS).filter(d => c.by === "team" ? (!c.team || d === c.team) : (!c.channel || d === c.channel));
+  let row = 2, any = false;
+  dims.forEach(g => {
+    const items = inMonth.filter(r => c.by === "team" ? r.team === g : (r.channels || []).includes(g));
+    if(!items.length) return;
+    any = true;
+    items.forEach((r, i) => {
+      const s = r.startDate < iso(m) ? 1 : parseD(r.startDate).getDate();
+      const eD = endOf(r), e = eD > dayMeta[n-1].s ? n : parseD(eD).getDate();
+      html += `<div class="lab ${i ? "cont" : ""} ${i ? "" : "grp"}" style="grid-row:${row};grid-column:1">${i ? "" : `<span class="sw" style="--c:${colorFor(c.by, g)}"></span>${esc(g)}`}</div>`;
+      html += dayMeta.map((x, k) => `<div class="bg ${x.wk ? "wk" : ""} ${x.s === t ? "today" : ""} ${i ? "" : "grp"}" style="grid-row:${row};grid-column:${k+2}"></div>`).join("");
+      html += `<button class="${chipCls(r)} bar" style="--c:${colorFor(c.by, g)};grid-row:${row};grid-column:${s+1} / ${e+2}" data-id="${esc(r.id)}" title="${esc(chipTitle(r))}">${esc(r.title)}</button>`;
+      row++;
+    });
+  });
+  if(!any) html += `<div class="empty" style="grid-column:1 / -1">Nothing scheduled this month for these filters.</div>`;
+  $("#calHost").innerHTML = `<div class="tl" style="${cols}">${html}</div>`;
+}
+
+/* ---------- render ---------- */
+function renderAll(){
+  renderSummary();
+  if(state.tab === "requests") renderList();
+  if(state.tab === "calendar") renderCal();
+  if(state.openId){ if(!state.requests.some(r => r.id === state.openId)) closeDrawer(); else if(!state.dirty) renderDrawer(); }
+}
+
+const hashTab = (location.hash || "").slice(1);
+setTab(["form","requests","calendar"].includes(hashTab) ? hashTab : "form");
+
+(async () => {
+  let db = null;
+  try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch(e){ db = null; }
+  if(!db){ state.local = true; state.loaded = true; $("#localBanner").hidden = false; renderAll(); return; }
+  state.db = db;
+  db.collection("requests").onSnapshot(snap => {
+    state.requests = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    state.loaded = true; renderAll();
+  }, e => { state.loaded = true; toast(e && e.code === "revoked" ? "Your access to this tracker changed. Reload the page." : "Live updates stopped. Reload the page to reconnect."); renderAll(); });
+})();
+</script>
