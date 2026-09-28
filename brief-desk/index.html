@@ -189,6 +189,36 @@ td .sub{color:var(--muted);font-size:12px}
 .tl .bg.wk{background:var(--weekend)}
 .tl .bg.today{background:var(--today)}
 
+/* teams */
+.teams-intro{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;margin-bottom:20px}
+@media (max-width:760px){.teams-intro{grid-template-columns:1fr}}
+.roles{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.roles li{display:grid;grid-template-columns:130px minmax(0,1fr);gap:12px}
+.roles b{font-weight:600}
+.roles span{color:var(--muted)}
+.mine{font-size:13px;color:var(--muted)}
+.mine strong{color:var(--ink)}
+.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.team-card{display:flex;flex-direction:column;gap:12px}
+.team-card h3{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.team-card h3 small{font-family:var(--body);font-weight:400;font-size:12px;color:var(--muted)}
+.members{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.member{display:flex;align-items:center;gap:8px;min-width:0}
+.member img{width:24px;height:24px;border-radius:50%;flex:none}
+.member .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.member .you{font-size:11px;color:var(--accent);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.member button{border:0;background:none;color:var(--muted);cursor:pointer;padding:2px 6px;border-radius:4px;font-size:12px}
+.member button:hover{color:var(--st-dec);background:var(--st-dec-bg)}
+.picker{position:relative}
+.results{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;box-shadow:var(--shadow);z-index:5;overflow:hidden}
+.results button{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;padding:8px 10px;text-align:left;cursor:pointer}
+.results button:hover,.results button:focus-visible{background:var(--accent-soft)}
+.results img{width:22px;height:22px;border-radius:50%}
+.results .none{padding:8px 10px;color:var(--muted);font-size:13px}
+.lock{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:10px;background:var(--surface-2);border:1px dashed var(--line-strong);color:var(--muted)}
+.lock b{color:var(--ink)}
+.byline{font-size:12.5px;color:var(--muted)}
+
 /* drawer */
 .scrim{position:fixed;inset:0;background:rgba(10,18,15,.42);z-index:20}
 .drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);z-index:21;box-shadow:var(--shadow);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -216,6 +246,7 @@ td .sub{color:var(--muted);font-size:12px}
       <button class="tab" role="tab" id="tab-form" data-tab="form" aria-selected="true">New brief</button>
       <button class="tab" role="tab" id="tab-requests" data-tab="requests" aria-selected="false">Requests <span class="badge" id="newBadge" hidden>0</span></button>
       <button class="tab" role="tab" id="tab-calendar" data-tab="calendar" aria-selected="false">Calendar</button>
+      <button class="tab" role="tab" id="tab-teams" data-tab="teams" aria-selected="false">Teams</button>
     </nav>
   </header>
   <div class="banner" id="localBanner" hidden>Shared storage isn't available in this view, so requests you add here stay in this tab only and disappear when you close it.</div>
@@ -334,6 +365,25 @@ td .sub{color:var(--muted);font-size:12px}
     <div class="legend" id="legend"></div>
     <div class="scroller" id="calHost"></div>
   </section>
+
+  <!-- TEAMS -->
+  <section class="view" id="view-teams" hidden>
+    <div class="teams-intro">
+      <div class="card">
+        <h3>Who can do what</h3>
+        <ul class="roles">
+          <li><b>Anyone</b><span>Submits briefs and sees every request and the calendar.</span></li>
+          <li><b>Team member</b><span>Accepts or declines briefs sent to their approving team, then sets channels, owner, due date and status.</span></li>
+          <li><b>Admin</b><span>The tracker's owner and Editors. Adds and removes team members and can delete requests.</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Your access</h3>
+        <p class="mine" id="myAccess">Checking your access…</p>
+      </div>
+    </div>
+    <div class="team-grid" id="teamGrid"></div>
+  </section>
 </div>
 
 <div class="scrim" id="scrim" hidden></div>
@@ -366,7 +416,9 @@ function endOf(r){ return r.endDate && r.endDate >= r.startDate ? r.endDate : r.
 function opts(el, list, allLabel){ el.innerHTML = (allLabel ? `<option value="">${esc(allLabel)}</option>` : `<option value="" disabled selected>Select…</option>`) + list.map(v => `<option>${esc(v)}</option>`).join(""); }
 
 const state = {
-  requests: [], db: null, loaded: false, local: false,
+  requests: [], raw: [], work: {}, myWorkExists: false, roster: {teams: {}, removed: {}},
+  user: null, me: null, admin: false, names: {}, avatars: {},
+  db: null, loaded: false, local: false,
   tab: "form",
   f: { q: "", status: "", team: "", approving: "", channel: "" },
   cal: { month: (() => { const t = today0(); return new Date(t.getFullYear(), t.getMonth(), 1); })(), view: "month", by: "team", team: "", channel: "", hideDec: true },
@@ -391,14 +443,14 @@ async function writeReq(id, data, merge){
     try { merge ? await ref.update(data) : await ref.set(data); return true; }
     catch(e){ if(e && e.code === "unavailable"){ try { await new Promise(r => setTimeout(r, 400 + Math.random()*600)); merge ? await ref.update(data) : await ref.set(data); return true; } catch(e2){ toast(errMsg(e2)); return false; } } toast(errMsg(e)); return false; }
   }
-  const i = state.requests.findIndex(r => r.id === id);
-  if(i >= 0) state.requests[i] = merge ? {...state.requests[i], ...data} : {id, ...data};
-  else state.requests.push({id, ...data});
+  const i = state.raw.findIndex(r => r.id === id);
+  if(i >= 0) state.raw[i] = merge ? {...state.raw[i], ...data} : {id, ...data};
+  else state.raw.push({id, ...data});
   renderAll(); return true;
 }
 async function deleteReq(id){
   if(state.db){ try { await state.db.collection("requests").doc(id).delete(); return true; } catch(e){ toast(errMsg(e)); return false; } }
-  state.requests = state.requests.filter(r => r.id !== id); renderAll(); return true;
+  state.raw = state.raw.filter(r => r.id !== id); renderAll(); return true;
 }
 function newId(){
   const d = new Date(); const a = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let s = "";
@@ -406,14 +458,74 @@ function newId(){
   return "BR-" + String(d.getMonth()+1).padStart(2,"0") + String(d.getDate()).padStart(2,"0") + "-" + s;
 }
 
+/* ---------- roles ---------- */
+function teamMembers(t){ const l = state.roster.teams && state.roster.teams[t]; return Array.isArray(l) ? l : []; }
+function myTeams(){ return state.me ? APPROVING_TEAMS.filter(t => teamMembers(t).includes(state.me)) : []; }
+function canAct(r){ return state.local || (!!state.me && teamMembers(r.approvingTeam).includes(state.me)); }
+function canDelete(r){ return state.local || state.admin || (!!state.me && r.submittedBy === state.me && r.status === "New"); }
+// A decision counts when its author is on the approving team now, or was when they made it.
+function decisionCounts(uid, team, at){
+  if(teamMembers(team).includes(uid)) return true;
+  const gone = state.roster.removed && state.roster.removed[team] && state.roster.removed[team][uid];
+  return !!gone && String(at) <= String(gone);
+}
+const EXEC_BLANK = { status: "New", owner: "", dueDate: "", effort: null, execNotes: "", declineReason: "", channels: [], acceptedAt: "", decidedBy: null, decidedAt: "" };
+function effective(r){
+  if(state.local) return r;
+  let best = null, by = null;
+  for(const uid of Object.keys(state.work)){
+    const d = state.work[uid][r.id];
+    if(!d || typeof d !== "object" || !decisionCounts(uid, r.approvingTeam, d.at)) continue;
+    if(!best || String(d.at) > String(best.at)){ best = d; by = uid; }
+  }
+  const out = {...r, ...EXEC_BLANK};
+  if(!best) return out;
+  return {...out,
+    status: STATUSES.includes(best.status) ? best.status : "New",
+    owner: String(best.owner || ""), dueDate: String(best.dueDate || ""), effort: typeof best.effort === "number" ? best.effort : null,
+    execNotes: String(best.execNotes || ""), declineReason: String(best.declineReason || ""),
+    channels: Array.isArray(best.channels) ? best.channels.filter(c => CHANNELS.includes(c)) : [],
+    acceptedAt: String(best.acceptedAt || ""), decidedBy: by, decidedAt: String(best.at || "")};
+}
+function rebuild(){ state.requests = state.raw.map(effective); }
+async function writeDecision(id, patch){
+  if(state.local) return writeReq(id, patch, true);
+  if(!state.me){ toast("Sign in to claude.ai to accept briefs."); return false; }
+  const ref = state.db.doc("work/" + state.me), body = {decisions: {[id]: {...patch, at: new Date().toISOString()}}};
+  try { state.myWorkExists ? await ref.update(body) : await ref.set(body); state.myWorkExists = true; return true; }
+  catch(e){ toast(errMsg(e)); return false; }
+}
+async function writeRoster(teams, removed){
+  try { await state.db.doc("config/roster").set({teams, removed}); return true; }
+  catch(e){ toast(e && e.code === "invalid_argument" ? "Only the tracker's owner and Editors can change teams." : errMsg(e)); return false; }
+}
+function nameOf(id){ return state.names[id] || "Someone"; }
+let namePending = false;
+async function ensureNames(ids){
+  if(!state.user || !ids.length) return;
+  const ps = await state.user.profiles([...new Set(ids)]);
+  let changed = false;
+  for(const id of Object.keys(ps)){
+    const n = ps[id].name || "", a = ps[id].avatarUrl || "";
+    if(state.names[id] !== n || state.avatars[id] !== a){ state.names[id] = n; state.avatars[id] = a; changed = true; }
+  }
+  if(changed && !namePending){ namePending = true; queueMicrotask(() => { namePending = false; renderAll(); }); }
+}
+function allPeopleIds(){
+  const ids = new Set(Object.keys(state.work));
+  APPROVING_TEAMS.forEach(t => teamMembers(t).forEach(u => ids.add(u)));
+  return [...ids];
+}
+
 /* ---------- tabs ---------- */
 function setTab(t){
   state.tab = t;
   document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
-  ["form","requests","calendar"].forEach(v => $("#view-"+v).hidden = v !== t);
+  ["form","requests","calendar","teams"].forEach(v => $("#view-"+v).hidden = v !== t);
   try { history.replaceState(null, "", "#" + t); } catch(e){}
   if(t === "requests") renderList();
   if(t === "calendar") renderCal();
+  if(t === "teams") renderTeams();
 }
 document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
 
@@ -465,9 +577,9 @@ form.addEventListener("submit", async ev => {
     kpis: v("#f-kpis"), links: v("#f-links"), startDate: start, endDate: v("#f-end"),
     notes: v("#f-notes"),
     rush: hoursUntil(parseD(start)) < RUSH_HOURS,
-    status: "New", submittedAt: new Date().toISOString(),
-    owner: "", dueDate: "", effort: null, execNotes: "", declineReason: "", acceptedAt: ""
+    submittedAt: new Date().toISOString(), submittedBy: state.me || null
   };
+  if(state.local) Object.assign(data, EXEC_BLANK);
   const btn = $("#submitBtn"); btn.disabled = true; btn.textContent = "Submitting…";
   const id = newId();
   const ok = await writeReq(id, data, false);
@@ -497,7 +609,8 @@ function listFiltered(){
     if(f.status === "__open" && !OPEN.includes(r.status)) return false;
     if(f.status && f.status !== "__open" && r.status !== f.status) return false;
     if(f.team && r.team !== f.team) return false;
-    if(f.approving && r.approvingTeam !== f.approving) return false;
+    if(f.approving === "__mine" && !myTeams().includes(r.approvingTeam)) return false;
+    if(f.approving && f.approving !== "__mine" && r.approvingTeam !== f.approving) return false;
     if(f.channel && !(r.channels || []).includes(f.channel)) return false;
     if(f.q){ const hay = [r.id, r.title, r.requester, r.owner, r.team].join(" ").toLowerCase(); if(!hay.includes(f.q)) return false; }
     return true;
@@ -526,7 +639,7 @@ function renderList(){
       <td>${(r.channels || []).length ? `<div class="tags">${r.channels.map(c => `<span class="tag">${esc(c)}</span>`).join("")}</div>` : '<span class="sub">Not set</span>'}</td>
       <td style="white-space:nowrap">${fmt(r.startDate)}${r.endDate && r.endDate !== r.startDate ? `<div class="sub">to ${fmt(r.endDate)}</div>` : ""}${r.rush && OPEN.includes(r.status) ? ' <span class="flag">Rush</span>' : ""}</td>
       <td class="prio-${esc(r.priority)}">${esc(r.priority)}</td>
-      <td><span class="pill ${stCls(r.status)}">${esc(r.status)}</span></td>
+      <td><span class="pill ${stCls(r.status)}">${esc(r.status)}</span>${r.status === "New" && !state.local && canAct(r) ? '<div class="sub">Your team to review</div>' : ""}</td>
       <td>${r.owner ? esc(r.owner) : '<span class="sub">Unassigned</span>'}</td>
     </tr>`).join("");
   $("#rows").querySelectorAll("tr").forEach(tr => {
@@ -547,7 +660,18 @@ function renderDrawer(){
   const r = state.requests.find(x => x.id === state.openId), d = $("#drawer");
   if(!r){ closeDrawer(); return; }
   const row = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
-  const isNew = r.status === "New";
+  const isNew = r.status === "New", act = canAct(r);
+  const byline = r.decidedBy ? `<div class="byline">Last updated by ${esc(nameOf(r.decidedBy))} on ${new Date(r.decidedAt).toLocaleString(undefined,{dateStyle:"medium",timeStyle:"short"})}</div>` : "";
+  if(r.decidedBy) ensureNames([r.decidedBy]);
+  const team = r.approvingTeam ? esc(r.approvingTeam) : "the approving";
+  const members = teamMembers(r.approvingTeam);
+  const readOnly = `
+      <div class="exec">
+        <h3 style="font-family:var(--body);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">${isNew ? "Awaiting review" : "Execution"}${r.approvingTeam ? " · " + esc(r.approvingTeam) : ""}</h3>
+        ${isNew ? "" : `<dl class="dl">${row("Owner", esc(r.owner))}${row("Due", r.dueDate ? esc(fmt(r.dueDate)) : "")}${row("Effort", r.effort != null ? esc(r.effort) + " hours" : "")}${row("Team notes", esc(r.execNotes))}${row("Decline reason", esc(r.declineReason))}</dl>`}
+        ${byline}
+        <div class="lock"><span>Only members of the <b>${team}</b> team can ${isNew ? "accept or decline this brief" : "update it"}.${members.length ? "" : " Nobody has been added to this team yet. An admin can add people on the Teams tab."}</span></div>
+      </div>`;
   d.innerHTML = `
     <div class="dhead">
       <div>
@@ -558,7 +682,8 @@ function renderDrawer(){
       <button class="btn small x" id="dClose" aria-label="Close">Close</button>
     </div>
     <div class="dbody">
-      <div class="exec" id="execBox">
+      ${act ? "" : readOnly}
+      <div class="exec" id="execBox" ${act ? "" : "hidden"}>
         <h3 style="font-family:var(--body);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">${isNew ? "Review this brief" : "Execution"}${r.approvingTeam ? " · " + esc(r.approvingTeam) : ""}</h3>
         <div class="fields">
           ${isNew ? "" : `<div class="field"><label for="x-status">Status</label><select id="x-status">${STATUSES.map(s => `<option ${s === r.status ? "selected" : ""}>${s}</option>`).join("")}</select></div>`}
@@ -569,6 +694,7 @@ function renderDrawer(){
           <div class="field full"><label for="x-notes">Team notes</label><textarea id="x-notes" placeholder="Scope decisions, dependencies, handoffs">${esc(r.execNotes)}</textarea></div>
           <div class="field full" id="reasonField" ${r.status === "Declined" || isNew ? "" : "hidden"}><label for="x-reason">Decline reason${isNew ? "" : ""}</label><textarea id="x-reason" placeholder="Required when declining">${esc(r.declineReason)}</textarea><span class="err">Add a reason so the requester knows what to change.</span></div>
         </div>
+        ${byline}
         <div class="actions">
           ${isNew ? `<button class="btn primary" id="acceptBtn">Accept request</button><button class="btn danger" id="declineBtn">Decline</button>` : `<button class="btn primary" id="saveBtn" disabled>Save changes</button>`}
         </div>
@@ -590,7 +716,7 @@ function renderDrawer(){
       <div class="dsec"><h3>Requester</h3><dl class="dl">
         ${row("Name", esc(r.requester))}${row("Approving team", esc(r.approvingTeam))}
       </dl></div>
-      <div class="dsec" id="delBox"><button class="btn danger small" id="delBtn">Delete request</button></div>
+      ${canDelete(r) ? '<div class="dsec" id="delBox"><button class="btn danger small" id="delBtn">Delete request</button></div>' : ""}
     </div>`;
   d.hidden = false; $("#scrim").hidden = false;
   $("#dClose").addEventListener("click", closeDrawer);
@@ -600,18 +726,19 @@ function renderDrawer(){
   if(st) st.addEventListener("change", () => { $("#reasonField").hidden = st.value !== "Declined"; });
   const execVals = () => ({ owner: $("#x-owner").value.trim(), dueDate: $("#x-due").value, effort: $("#x-effort").value === "" ? null : Number($("#x-effort").value), execNotes: $("#x-notes").value.trim(), declineReason: $("#x-reason").value.trim(), channels: [...$("#chField").querySelectorAll("input:checked")].map(i => i.value) });
   const needReason = () => { if(!$("#x-reason").value.trim()){ $("#reasonField").hidden = false; $("#reasonField").classList.add("invalid"); $("#x-reason").focus(); return true; } return false; };
-  const commit = async (patch, msg) => { const ok = await writeReq(r.id, patch, true); if(ok){ state.dirty = false; toast(msg); if(state.local) renderDrawer(); } };
-  if(isNew){
+  const commit = async (patch, msg) => { const ok = await writeDecision(r.id, patch); if(ok){ state.dirty = false; toast(msg); if(state.local) renderDrawer(); } };
+  if(!act){ /* read-only view */ }
+  else if(isNew){
     $("#acceptBtn").addEventListener("click", () => { const f = $("#chField"); if(!f.querySelector("input:checked")){ f.classList.add("invalid"); f.querySelector("input").focus(); return; } f.classList.remove("invalid"); commit({...execVals(), declineReason: "", status: "Accepted", acceptedAt: new Date().toISOString()}, `Accepted ${r.id}`); });
     $("#declineBtn").addEventListener("click", () => { if(needReason()) return; commit({...execVals(), status: "Declined"}, `Declined ${r.id}`); });
   } else {
     $("#saveBtn").addEventListener("click", () => {
       const s = $("#x-status").value;
       if(s === "Declined" && needReason()) return;
-      commit({...execVals(), status: s}, "Changes saved");
+      commit({...execVals(), status: s, acceptedAt: r.acceptedAt || (s === "Declined" ? "" : new Date().toISOString())}, "Changes saved");
     });
   }
-  $("#delBtn").addEventListener("click", () => {
+  if($("#delBtn")) $("#delBtn").addEventListener("click", () => {
     $("#delBox").innerHTML = `<div class="confirm">Delete ${esc(r.id)} for everyone? <button class="btn danger small" id="delYes">Delete</button><button class="btn small" id="delNo">Keep it</button></div>`;
     $("#delNo").addEventListener("click", renderDrawer);
     $("#delYes").addEventListener("click", async () => { if(await deleteReq(r.id)){ closeDrawer(); toast(`Deleted ${r.id}`); } });
@@ -697,24 +824,127 @@ function renderTimeline(inMonth, m){
 }
 
 /* ---------- render ---------- */
+/* ---------- teams ---------- */
+function buildTeams(){
+  $("#teamGrid").innerHTML = APPROVING_TEAMS.map((t, i) => `
+    <div class="card team-card">
+      <h3>${esc(t)} <small id="tc-${i}"></small></h3>
+      <ul class="members" id="tm-${i}"></ul>
+      <div class="picker" id="tp-${i}" hidden>
+        <input type="search" id="ta-${i}" placeholder="Add a person by name" aria-label="Add a person to ${esc(t)}" autocomplete="off">
+        <div class="results" id="tr-${i}" hidden></div>
+      </div>
+    </div>`).join("");
+  APPROVING_TEAMS.forEach((t, i) => {
+    const inp = $("#ta-" + i), res = $("#tr-" + i);
+    const show = async q => {
+      if(!state.user) return;
+      const hits = (await state.user.search(q)).filter(h => !teamMembers(t).includes(h.id));
+      if(document.activeElement !== inp && !res.contains(document.activeElement)) return;
+      res.innerHTML = "";
+      if(!hits.length){ const n = document.createElement("div"); n.className = "none"; n.textContent = q ? "No matching people" : "Type a name to search"; res.append(n); }
+      hits.forEach(h => {
+        const b = document.createElement("button"); b.type = "button";
+        const img = document.createElement("img"); img.src = h.avatarUrl; img.alt = "";
+        const sp = document.createElement("span"); sp.textContent = h.name;
+        b.append(img, sp);
+        b.addEventListener("click", async () => {
+          res.hidden = true; inp.value = "";
+          const teams = JSON.parse(JSON.stringify(state.roster.teams || {})), removed = JSON.parse(JSON.stringify(state.roster.removed || {}));
+          teams[t] = [...new Set([...(teams[t] || []), h.id])];
+          if(removed[t]) delete removed[t][h.id];
+          if(await writeRoster(teams, removed)) toast(`Added ${h.name} to ${t}`);
+        });
+        res.append(b);
+      });
+      res.hidden = false;
+    };
+    inp.addEventListener("focus", () => show(inp.value.trim()));
+    inp.addEventListener("input", () => show(inp.value.trim()));
+    inp.closest(".picker").addEventListener("focusout", e => { if(!e.currentTarget.contains(e.relatedTarget)) res.hidden = true; });
+    inp.addEventListener("keydown", e => { if(e.key === "Escape"){ res.hidden = true; inp.blur(); } });
+  });
+}
+function renderTeams(){
+  if(!$("#tm-0")) buildTeams();
+  const acc = $("#myAccess");
+  if(state.local) acc.textContent = "Teams need shared storage, which isn't available in this view. Everyone can accept briefs here.";
+  else if(!state.me) acc.textContent = "You can submit briefs. Sign in to claude.ai to be added to a team.";
+  else {
+    const mt = myTeams();
+    acc.innerHTML = (state.admin ? "<strong>Admin.</strong> You can add and remove team members and delete requests. " : "")
+      + (mt.length ? `You review briefs for <strong>${mt.map(esc).join(", ")}</strong>.` : "You're not on an approving team, so you can submit briefs but not accept them." + (state.admin ? " Add yourself to a team below to review its briefs." : " Ask the tracker's owner to add you."));
+  }
+  const ids = allPeopleIds(); ensureNames(ids);
+  APPROVING_TEAMS.forEach((t, i) => {
+    const list = $("#tm-" + i), m = teamMembers(t);
+    $("#tc-" + i).textContent = m.length === 1 ? "1 member" : `${m.length} members`;
+    $("#tp-" + i).hidden = !(state.admin && state.user && !state.local);
+    list.innerHTML = "";
+    if(!m.length){ const li = document.createElement("li"); li.className = "hint"; li.textContent = state.admin ? "No members yet. Add the people who review this team's briefs." : "No members yet."; list.append(li); }
+    m.forEach(uid => {
+      const li = document.createElement("li"); li.className = "member";
+      const img = document.createElement("img"); img.alt = ""; if(state.avatars[uid]) img.src = state.avatars[uid]; else img.hidden = true;
+      const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = nameOf(uid);
+      li.append(img, nm);
+      if(uid === state.me){ const y = document.createElement("span"); y.className = "you"; y.textContent = "You"; li.append(y); }
+      if(state.admin){
+        const b = document.createElement("button"); b.type = "button"; b.textContent = "Remove"; b.setAttribute("aria-label", `Remove ${nameOf(uid)} from ${t}`);
+        b.addEventListener("click", async () => {
+          const teams = JSON.parse(JSON.stringify(state.roster.teams || {})), removed = JSON.parse(JSON.stringify(state.roster.removed || {}));
+          teams[t] = (teams[t] || []).filter(x => x !== uid);
+          removed[t] = {...(removed[t] || {}), [uid]: new Date().toISOString()};
+          if(await writeRoster(teams, removed)) toast(`Removed ${nameOf(uid)} from ${t}`);
+        });
+        li.append(b);
+      }
+      list.append(li);
+    });
+  });
+}
+function refreshMineOption(){
+  const sel = $("#fApproving"), has = sel.querySelector('option[value="__mine"]'), mine = myTeams().length > 0;
+  if(mine && !has){ const o = document.createElement("option"); o.value = "__mine"; o.textContent = "My teams"; sel.insertBefore(o, sel.options[1]); }
+  if(!mine && has){ has.remove(); if(state.f.approving === "__mine"){ state.f.approving = ""; sel.value = ""; } }
+}
+
 function renderAll(){
+  rebuild();
+  refreshMineOption();
   renderSummary();
+  if(state.tab === "teams") renderTeams();
   if(state.tab === "requests") renderList();
   if(state.tab === "calendar") renderCal();
   if(state.openId){ if(!state.requests.some(r => r.id === state.openId)) closeDrawer(); else if(!state.dirty) renderDrawer(); }
 }
 
 const hashTab = (location.hash || "").slice(1);
-setTab(["form","requests","calendar"].includes(hashTab) ? hashTab : "form");
+setTab(["form","requests","calendar","teams"].includes(hashTab) ? hashTab : "form");
 
 (async () => {
   let db = null;
   try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch(e){ db = null; }
   if(!db){ state.local = true; state.loaded = true; $("#localBanner").hidden = false; renderAll(); return; }
   state.db = db;
+  try {
+    const user = await window.claude.use("user");
+    if(user){ state.user = user; state.me = await user.id(); state.admin = await user.canEdit(); }
+  } catch(e){}
+  const lost = e => toast(e && e.code === "revoked" ? "Your access to this tracker changed. Reload the page." : "Live updates stopped. Reload the page to reconnect.");
   db.collection("requests").onSnapshot(snap => {
-    state.requests = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    state.raw = snap.docs.map(d => ({id: d.id, ...d.data()}));
     state.loaded = true; renderAll();
-  }, e => { state.loaded = true; toast(e && e.code === "revoked" ? "Your access to this tracker changed. Reload the page." : "Live updates stopped. Reload the page to reconnect."); renderAll(); });
+  }, e => { state.loaded = true; lost(e); renderAll(); });
+  db.collection("work").onSnapshot(snap => {
+    state.work = {};
+    snap.docs.forEach(d => { const dec = (d.data() || {}).decisions; state.work[d.id] = dec && typeof dec === "object" ? dec : {}; });
+    state.myWorkExists = !!state.me && snap.docs.some(d => d.id === state.me);
+    renderAll(); ensureNames(allPeopleIds());
+  }, lost);
+  db.doc("config/roster").onSnapshot(snap => {
+    const d = snap.exists ? snap.data() : {};
+    state.roster = {teams: d.teams && typeof d.teams === "object" ? d.teams : {}, removed: d.removed && typeof d.removed === "object" ? d.removed : {}};
+    renderAll(); ensureNames(allPeopleIds());
+  }, lost);
 })();
 </script>
