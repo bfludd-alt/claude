@@ -218,6 +218,14 @@ td .sub{color:var(--muted);font-size:12px}
 .lock{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:10px;background:var(--surface-2);border:1px dashed var(--line-strong);color:var(--muted)}
 .lock b{color:var(--ink)}
 .byline{font-size:12.5px;color:var(--muted)}
+.team-admin{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+.team-admin .lbl{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.pending{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.pending li{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pending .nm{flex:1;min-width:0;font-weight:500}
+.access-actions{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.access-actions .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.access-actions input{max-width:260px}
 
 /* drawer */
 .scrim{position:fixed;inset:0;background:rgba(10,18,15,.42);z-index:20}
@@ -380,6 +388,7 @@ td .sub{color:var(--muted);font-size:12px}
       <div class="card">
         <h3>Your access</h3>
         <p class="mine" id="myAccess">Checking your access…</p>
+        <div class="access-actions" id="accessActions"></div>
       </div>
     </div>
     <div class="team-grid" id="teamGrid"></div>
@@ -417,7 +426,7 @@ function opts(el, list, allLabel){ el.innerHTML = (allLabel ? `<option value="">
 
 const state = {
   requests: [], raw: [], work: {}, myWorkExists: false, roster: {teams: {}, removed: {}},
-  user: null, me: null, admin: false, names: {}, avatars: {},
+  user: null, perms: null, userPerm: "", me: null, myName: "", admin: false, names: {}, avatars: {}, meta: {},
   db: null, loaded: false, local: false,
   tab: "form",
   f: { q: "", status: "", team: "", approving: "", channel: "" },
@@ -488,18 +497,41 @@ function effective(r){
     acceptedAt: String(best.acceptedAt || ""), decidedBy: by, decidedAt: String(best.at || "")};
 }
 function rebuild(){ state.requests = state.raw.map(effective); }
-async function writeDecision(id, patch){
-  if(state.local) return writeReq(id, patch, true);
-  if(!state.me){ toast("Sign in to claude.ai to accept briefs."); return false; }
-  const ref = state.db.doc("work/" + state.me), body = {decisions: {[id]: {...patch, at: new Date().toISOString()}}};
+// Each person's own document: work/<their id> = {decisions, joins, label}. Only they can write it.
+async function writeWork(body){
+  if(!state.me){ toast("Brief Desk can't tell who you are yet. Use the Allow button on the Teams tab."); return false; }
+  const ref = state.db.doc("work/" + state.me);
   try { state.myWorkExists ? await ref.update(body) : await ref.set(body); state.myWorkExists = true; return true; }
   catch(e){ toast(errMsg(e)); return false; }
 }
-async function writeRoster(teams, removed){
-  try { await state.db.doc("config/roster").set({teams, removed}); return true; }
+async function writeDecision(id, patch){
+  if(state.local) return writeReq(id, patch, true);
+  return writeWork({decisions: {[id]: {...patch, at: new Date().toISOString()}}});
+}
+async function changeRoster(fn, msg){
+  const r = JSON.parse(JSON.stringify({teams: state.roster.teams || {}, removed: state.roster.removed || {}, dismissed: state.roster.dismissed || {}}));
+  fn(r);
+  try { await state.db.doc("config/roster").set(r); toast(msg); return true; }
   catch(e){ toast(e && e.code === "invalid_argument" ? "Only the tracker's owner and Editors can change teams." : errMsg(e)); return false; }
 }
-function nameOf(id){ return state.names[id] || "Someone"; }
+function addMember(team, uid, label){
+  return changeRoster(r => {
+    r.teams[team] = [...new Set([...(r.teams[team] || []), uid])];
+    if(r.removed[team]) delete r.removed[team][uid];
+  }, `Added ${label} to ${team}`);
+}
+function pendingJoins(team){
+  const out = [];
+  for(const uid of Object.keys(state.meta)){
+    const at = state.meta[uid].joins && state.meta[uid].joins[team];
+    if(!at || teamMembers(team).includes(uid)) continue;
+    const dis = state.roster.dismissed && state.roster.dismissed[team] && state.roster.dismissed[team][uid];
+    if(dis && String(at) <= String(dis)) continue;
+    out.push(uid);
+  }
+  return out;
+}
+function nameOf(id){ return state.names[id] || (state.meta[id] && state.meta[id].label) || "Someone"; }
 let namePending = false;
 async function ensureNames(ids){
   if(!state.user || !ids.length) return;
@@ -512,7 +544,7 @@ async function ensureNames(ids){
   if(changed && !namePending){ namePending = true; queueMicrotask(() => { namePending = false; renderAll(); }); }
 }
 function allPeopleIds(){
-  const ids = new Set(Object.keys(state.work));
+  const ids = new Set([...Object.keys(state.work), ...(state.me ? [state.me] : [])]);
   APPROVING_TEAMS.forEach(t => teamMembers(t).forEach(u => ids.add(u)));
   return [...ids];
 }
@@ -825,14 +857,22 @@ function renderTimeline(inMonth, m){
 
 /* ---------- render ---------- */
 /* ---------- teams ---------- */
+function el(tag, cls, text){ const e = document.createElement(tag); if(cls) e.className = cls; if(text != null) e.textContent = text; return e; }
+function btn(text, cls, fn, label){ const b = el("button", "btn small " + (cls || ""), text); b.type = "button"; if(label) b.setAttribute("aria-label", label); b.addEventListener("click", fn); return b; }
 function buildTeams(){
   $("#teamGrid").innerHTML = APPROVING_TEAMS.map((t, i) => `
     <div class="card team-card">
       <h3>${esc(t)} <small id="tc-${i}"></small></h3>
       <ul class="members" id="tm-${i}"></ul>
-      <div class="picker" id="tp-${i}" hidden>
-        <input type="search" id="ta-${i}" placeholder="Add a person by name" aria-label="Add a person to ${esc(t)}" autocomplete="off">
-        <div class="results" id="tr-${i}" hidden></div>
+      <div id="tself-${i}"></div>
+      <div class="team-admin" id="tadm-${i}" hidden>
+        <span class="lbl">Add people</span>
+        <div id="tme-${i}"></div>
+        <div class="picker" id="tp-${i}">
+          <input type="search" id="ta-${i}" placeholder="Search your organization by name" aria-label="Add a person to ${esc(t)}" autocomplete="off">
+          <div class="results" id="tr-${i}" hidden></div>
+        </div>
+        <div id="tjw-${i}" hidden><span class="lbl">Asked to join</span><ul class="pending" id="tj-${i}"></ul></div>
       </div>
     </div>`).join("");
   APPROVING_TEAMS.forEach((t, i) => {
@@ -842,19 +882,14 @@ function buildTeams(){
       const hits = (await state.user.search(q)).filter(h => !teamMembers(t).includes(h.id));
       if(document.activeElement !== inp && !res.contains(document.activeElement)) return;
       res.innerHTML = "";
-      if(!hits.length){ const n = document.createElement("div"); n.className = "none"; n.textContent = q ? "No matching people" : "Type a name to search"; res.append(n); }
+      if(!hits.length) res.append(el("div", "none", q
+        ? "No one found. If your account has no people directory, ask teammates to open this tab and click Ask to join."
+        : "Type a name to search."));
       hits.forEach(h => {
-        const b = document.createElement("button"); b.type = "button";
-        const img = document.createElement("img"); img.src = h.avatarUrl; img.alt = "";
-        const sp = document.createElement("span"); sp.textContent = h.name;
-        b.append(img, sp);
-        b.addEventListener("click", async () => {
-          res.hidden = true; inp.value = "";
-          const teams = JSON.parse(JSON.stringify(state.roster.teams || {})), removed = JSON.parse(JSON.stringify(state.roster.removed || {}));
-          teams[t] = [...new Set([...(teams[t] || []), h.id])];
-          if(removed[t]) delete removed[t][h.id];
-          if(await writeRoster(teams, removed)) toast(`Added ${h.name} to ${t}`);
-        });
+        const b = el("button"); b.type = "button";
+        const img = el("img"); img.src = h.avatarUrl; img.alt = "";
+        b.append(img, el("span", "", h.name));
+        b.addEventListener("click", () => { res.hidden = true; inp.value = ""; addMember(t, h.id, h.name); });
         res.append(b);
       });
       res.hidden = false;
@@ -865,42 +900,98 @@ function buildTeams(){
     inp.addEventListener("keydown", e => { if(e.key === "Escape"){ res.hidden = true; inp.blur(); } });
   });
 }
+async function allowIdentity(){
+  if(state.perms){ try { await state.perms.request(["user"]); } catch(e){} }
+  await loadIdentity(); renderAll();
+  if(!state.me) toast("Brief Desk still can't see who you are. Check the artifact's Permissions menu, then reload.");
+}
+function renderAccess(){
+  const acc = $("#myAccess"), act = $("#accessActions");
+  act.innerHTML = "";
+  if(state.local){ acc.textContent = "Teams need shared storage, which isn't available in this view. Everyone can accept briefs here."; return; }
+  if(!state.me){
+    acc.innerHTML = "Brief Desk doesn't know who you are yet, so team controls are hidden. You can still submit briefs."
+      + (state.admin ? " <strong>You're an admin</strong>: allow access to manage teams." : "");
+    act.append(btn("Allow Brief Desk to see who I am", "primary", allowIdentity));
+    return;
+  }
+  const mt = myTeams();
+  acc.innerHTML = (state.admin ? "<strong>Admin.</strong> Use Add me or the search box on each team to add people, and approve join requests. " : "")
+    + (mt.length ? `You review briefs for <strong>${mt.map(esc).join(", ")}</strong>.` : "You're not on an approving team yet, so you can submit briefs but not accept them.");
+  // Name shown to admins when the platform can't show your profile name.
+  const row = el("div", "row");
+  const lab = el("label", "hint", "Your name for join requests"); lab.htmlFor = "myLabel";
+  const inp = el("input"); inp.type = "text"; inp.id = "myLabel"; inp.maxLength = 60;
+  inp.value = (state.meta[state.me] && state.meta[state.me].label) || state.myName || "";
+  row.append(inp);
+  act.append(lab, row);
+}
+function myLabel(){ const i = $("#myLabel"); return i ? i.value.trim() : ""; }
 function renderTeams(){
   if(!$("#tm-0")) buildTeams();
-  const acc = $("#myAccess");
-  if(state.local) acc.textContent = "Teams need shared storage, which isn't available in this view. Everyone can accept briefs here.";
-  else if(!state.me) acc.textContent = "You can submit briefs. Sign in to claude.ai to be added to a team.";
-  else {
-    const mt = myTeams();
-    acc.innerHTML = (state.admin ? "<strong>Admin.</strong> You can add and remove team members and delete requests. " : "")
-      + (mt.length ? `You review briefs for <strong>${mt.map(esc).join(", ")}</strong>.` : "You're not on an approving team, so you can submit briefs but not accept them." + (state.admin ? " Add yourself to a team below to review its briefs." : " Ask the tracker's owner to add you."));
-  }
-  const ids = allPeopleIds(); ensureNames(ids);
+  if(!$("#myLabel") || document.activeElement !== $("#myLabel")) renderAccess();
+  ensureNames(allPeopleIds());
+  const admin = state.admin && !state.local;
   APPROVING_TEAMS.forEach((t, i) => {
     const list = $("#tm-" + i), m = teamMembers(t);
     $("#tc-" + i).textContent = m.length === 1 ? "1 member" : `${m.length} members`;
-    $("#tp-" + i).hidden = !(state.admin && state.user && !state.local);
     list.innerHTML = "";
-    if(!m.length){ const li = document.createElement("li"); li.className = "hint"; li.textContent = state.admin ? "No members yet. Add the people who review this team's briefs." : "No members yet."; list.append(li); }
+    if(!m.length) list.append(el("li", "hint", admin ? "No members yet. Add the people who review this team's briefs." : "No members yet."));
     m.forEach(uid => {
-      const li = document.createElement("li"); li.className = "member";
-      const img = document.createElement("img"); img.alt = ""; if(state.avatars[uid]) img.src = state.avatars[uid]; else img.hidden = true;
-      const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = nameOf(uid);
-      li.append(img, nm);
-      if(uid === state.me){ const y = document.createElement("span"); y.className = "you"; y.textContent = "You"; li.append(y); }
-      if(state.admin){
-        const b = document.createElement("button"); b.type = "button"; b.textContent = "Remove"; b.setAttribute("aria-label", `Remove ${nameOf(uid)} from ${t}`);
-        b.addEventListener("click", async () => {
-          const teams = JSON.parse(JSON.stringify(state.roster.teams || {})), removed = JSON.parse(JSON.stringify(state.roster.removed || {}));
-          teams[t] = (teams[t] || []).filter(x => x !== uid);
-          removed[t] = {...(removed[t] || {}), [uid]: new Date().toISOString()};
-          if(await writeRoster(teams, removed)) toast(`Removed ${nameOf(uid)} from ${t}`);
-        });
+      const li = el("li", "member");
+      const img = el("img"); img.alt = ""; if(state.avatars[uid]) img.src = state.avatars[uid]; else img.hidden = true;
+      li.append(img, el("span", "nm", nameOf(uid)));
+      if(uid === state.me) li.append(el("span", "you", "You"));
+      if(admin){
+        const b = el("button", "", "Remove"); b.type = "button"; b.setAttribute("aria-label", `Remove ${nameOf(uid)} from ${t}`);
+        b.addEventListener("click", () => changeRoster(r => {
+          r.teams[t] = (r.teams[t] || []).filter(x => x !== uid);
+          r.removed[t] = {...(r.removed[t] || {}), [uid]: new Date().toISOString()};
+        }, `Removed ${nameOf(uid)} from ${t}`));
         li.append(b);
       }
       list.append(li);
     });
+
+    // Self-service: ask to join
+    const self = $("#tself-" + i); self.innerHTML = "";
+    if(!state.local && state.me && !m.includes(state.me) && !admin){
+      const asked = state.meta[state.me] && state.meta[state.me].joins && state.meta[state.me].joins[t];
+      const waiting = asked && pendingJoins(t).includes(state.me);
+      if(waiting) self.append(el("span", "hint", "Request sent. An admin needs to approve it."));
+      else self.append(btn("Ask to join", "", async () => {
+        const label = myLabel();
+        if(!label && !state.myName){ const n = $("#myLabel"); if(n){ n.focus(); } toast("Add your name under Your access first."); return; }
+        if(await writeWork({joins: {[t]: new Date().toISOString()}, label: label || state.myName})) toast(`Asked to join ${t}`);
+      }, `Ask to join ${t}`));
+    }
+
+    // Admin tools
+    $("#tadm-" + i).hidden = !admin;
+    if(!admin) return;
+    const meBox = $("#tme-" + i); meBox.innerHTML = "";
+    if(state.me && !m.includes(state.me)) meBox.append(btn("Add me", "", () => addMember(t, state.me, "you"), `Add me to ${t}`));
+    $("#tp-" + i).hidden = !state.user;
+    const pend = pendingJoins(t), pl = $("#tj-" + i);
+    $("#tjw-" + i).hidden = !pend.length;
+    pl.innerHTML = "";
+    pend.forEach(uid => {
+      const li = el("li");
+      li.append(el("span", "nm", nameOf(uid)),
+        btn("Approve", "primary", () => addMember(t, uid, nameOf(uid)), `Approve ${nameOf(uid)} for ${t}`),
+        btn("Dismiss", "", () => changeRoster(r => { r.dismissed[t] = {...(r.dismissed[t] || {}), [uid]: new Date().toISOString()}; }, "Request dismissed"), `Dismiss ${nameOf(uid)}`));
+      pl.append(li);
+    });
   });
+}
+async function loadIdentity(){
+  if(!state.user) return;
+  try {
+    const me = await state.user.me();
+    state.me = me.id; state.myName = me.name || "";
+    state.admin = !!(me.canEdit || me.isOwner);
+    state.myWorkExists = !!state.me && Object.prototype.hasOwnProperty.call(state.work, state.me);
+  } catch(e){}
 }
 function refreshMineOption(){
   const sel = $("#fApproving"), has = sel.querySelector('option[value="__mine"]'), mine = myTeams().length > 0;
@@ -926,10 +1017,9 @@ setTab(["form","requests","calendar","teams"].includes(hashTab) ? hashTab : "for
   try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch(e){ db = null; }
   if(!db){ state.local = true; state.loaded = true; $("#localBanner").hidden = false; renderAll(); return; }
   state.db = db;
-  try {
-    const user = await window.claude.use("user");
-    if(user){ state.user = user; state.me = await user.id(); state.admin = await user.canEdit(); }
-  } catch(e){}
+  try { state.perms = await window.claude.use("permissions"); } catch(e){}
+  try { state.user = await window.claude.use("user"); } catch(e){}
+  await loadIdentity();
   const lost = e => toast(e && e.code === "revoked" ? "Your access to this tracker changed. Reload the page." : "Live updates stopped. Reload the page to reconnect.");
   db.collection("requests").onSnapshot(snap => {
     state.raw = snap.docs.map(d => ({id: d.id, ...d.data()}));
@@ -937,13 +1027,19 @@ setTab(["form","requests","calendar","teams"].includes(hashTab) ? hashTab : "for
   }, e => { state.loaded = true; lost(e); renderAll(); });
   db.collection("work").onSnapshot(snap => {
     state.work = {};
-    snap.docs.forEach(d => { const dec = (d.data() || {}).decisions; state.work[d.id] = dec && typeof dec === "object" ? dec : {}; });
+    state.meta = {};
+    snap.docs.forEach(d => {
+      const b = d.data() || {}, dec = b.decisions;
+      state.work[d.id] = dec && typeof dec === "object" ? dec : {};
+      state.meta[d.id] = {label: typeof b.label === "string" ? b.label.slice(0, 60) : "", joins: b.joins && typeof b.joins === "object" ? b.joins : {}};
+    });
     state.myWorkExists = !!state.me && snap.docs.some(d => d.id === state.me);
     renderAll(); ensureNames(allPeopleIds());
   }, lost);
   db.doc("config/roster").onSnapshot(snap => {
     const d = snap.exists ? snap.data() : {};
-    state.roster = {teams: d.teams && typeof d.teams === "object" ? d.teams : {}, removed: d.removed && typeof d.removed === "object" ? d.removed : {}};
+    const obj = v => v && typeof v === "object" ? v : {};
+    state.roster = {teams: obj(d.teams), removed: obj(d.removed), dismissed: obj(d.dismissed)};
     renderAll(); ensureNames(allPeopleIds());
   }, lost);
 })();
