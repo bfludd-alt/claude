@@ -3,7 +3,8 @@
 Intake and scheduling for Marketing requests.
 
 - **New brief**: a structured briefing form. Required fields (requester, requesting team, approving team, request name, type, priority, objective, audience, key message, success metrics, go-live date) are validated before submit. Requesters tick whether copy and/or creative is required; channels are picked by the execution team on acceptance. Briefs submitted less than 48 hours before go-live are flagged as rush.
-- **Requests**: the shared queue. Open a request to accept or decline it (accepting needs at least one channel; declining needs a reason), then assign an owner, internal due date, effort estimate and team notes, and move it through New → Accepted → In progress → In review → Delivered.
+- **Requests**: the shared queue. Open a request to accept or decline it (accepting needs at least one channel; declining needs a reason), then set an internal due date, effort estimate and team notes, and move it through New → Accepted → In progress → In review → Delivered.
+- **Ownership**: whoever accepts a brief becomes its owner by default; any member of the approving team can reassign it to a teammate. The Requests tab has **Owned by me** and **Accepted by me** views.
 - **Teams**: who reviews briefs for each approving team (CRM, Loyalty, Social Media, Digital Marketing, PR, Print & OOH). Admins (the artifact owner and Editors) add members with **Add me**, the people search, or by approving **Ask to join** requests, and remove them with **Remove**.
 - **Calendar**: a month grid and a timeline, grouped and coloured by marketing team or by channel, with team/channel filters.
 

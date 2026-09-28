@@ -123,6 +123,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--focus);outline:none;b
 .sumpill{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:5px 12px 5px 6px;cursor:pointer}
 .sumpill[aria-pressed="true"]{border-color:var(--ink)}
 .sumpill b{font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:12px;min-width:22px;text-align:center;border-radius:99px;padding:1px 6px}
+.scopebar{margin-bottom:12px}
+.scopebar .cnt{font-family:var(--mono);font-size:11px;font-weight:500;margin-left:4px;opacity:.8}
 .toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px}
 .toolbar > *{flex:1 1 160px;max-width:260px}
 .toolbar input[type=search]{flex:2 1 220px;max-width:none}
@@ -338,6 +340,13 @@ td .sub{color:var(--muted);font-size:12px}
 
   <!-- REQUESTS -->
   <section class="view" id="view-requests" hidden>
+    <div class="scopebar" id="scopeBar" hidden>
+      <span class="seg" id="segScope" role="group" aria-label="Show">
+        <button data-v="" aria-pressed="true">All requests</button>
+        <button data-v="owned" aria-pressed="false">Owned by me <b id="nOwned" class="cnt"></b></button>
+        <button data-v="accepted" aria-pressed="false">Accepted by me <b id="nAccepted" class="cnt"></b></button>
+      </span>
+    </div>
     <div class="summary" id="summary"></div>
     <div class="toolbar">
       <input type="search" id="q" placeholder="Search by name, ID, requester or owner" aria-label="Search requests">
@@ -381,7 +390,7 @@ td .sub{color:var(--muted);font-size:12px}
         <h3>Who can do what</h3>
         <ul class="roles">
           <li><b>Anyone</b><span>Submits briefs and sees every request and the calendar.</span></li>
-          <li><b>Team member</b><span>Accepts or declines briefs sent to their approving team, then sets channels, owner, due date and status.</span></li>
+          <li><b>Team member</b><span>Accepts or declines briefs sent to their approving team, becomes owner of what they accept, and can reassign it to a teammate.</span></li>
           <li><b>Admin</b><span>The tracker's owner and Editors. Adds and removes team members and can delete requests.</span></li>
         </ul>
       </div>
@@ -429,7 +438,7 @@ const state = {
   user: null, perms: null, userPerm: "", me: null, myName: "", admin: false, names: {}, avatars: {}, meta: {},
   db: null, loaded: false, local: false,
   tab: "form",
-  f: { q: "", status: "", team: "", approving: "", channel: "" },
+  f: { q: "", status: "", team: "", approving: "", channel: "", scope: "" },
   cal: { month: (() => { const t = today0(); return new Date(t.getFullYear(), t.getMonth(), 1); })(), view: "month", by: "team", team: "", channel: "", hideDec: true },
   openId: null, dirty: false
 };
@@ -478,7 +487,7 @@ function decisionCounts(uid, team, at){
   const gone = state.roster.removed && state.roster.removed[team] && state.roster.removed[team][uid];
   return !!gone && String(at) <= String(gone);
 }
-const EXEC_BLANK = { status: "New", owner: "", dueDate: "", effort: null, execNotes: "", declineReason: "", channels: [], acceptedAt: "", decidedBy: null, decidedAt: "" };
+const EXEC_BLANK = { status: "New", owner: "", ownerId: null, acceptedBy: null, dueDate: "", effort: null, execNotes: "", declineReason: "", channels: [], acceptedAt: "", decidedBy: null, decidedAt: "" };
 function effective(r){
   if(state.local) return r;
   let best = null, by = null;
@@ -491,7 +500,8 @@ function effective(r){
   if(!best) return out;
   return {...out,
     status: STATUSES.includes(best.status) ? best.status : "New",
-    owner: String(best.owner || ""), dueDate: String(best.dueDate || ""), effort: typeof best.effort === "number" ? best.effort : null,
+    owner: String(best.owner || ""), ownerId: typeof best.ownerId === "string" ? best.ownerId : null,
+    acceptedBy: typeof best.acceptedBy === "string" ? best.acceptedBy : null, dueDate: String(best.dueDate || ""), effort: typeof best.effort === "number" ? best.effort : null,
     execNotes: String(best.execNotes || ""), declineReason: String(best.declineReason || ""),
     channels: Array.isArray(best.channels) ? best.channels.filter(c => CHANNELS.includes(c)) : [],
     acceptedAt: String(best.acceptedAt || ""), decidedBy: by, decidedAt: String(best.at || "")};
@@ -532,6 +542,7 @@ function pendingJoins(team){
   return out;
 }
 function nameOf(id){ return state.names[id] || (state.meta[id] && state.meta[id].label) || "Someone"; }
+function ownerName(r){ return r.ownerId ? nameOf(r.ownerId) : (r.owner || ""); }
 let namePending = false;
 async function ensureNames(ids){
   if(!state.user || !ids.length) return;
@@ -635,33 +646,49 @@ $("#fTeam").addEventListener("change", e => { state.f.team = e.target.value; ren
 $("#fApproving").addEventListener("change", e => { state.f.approving = e.target.value; renderList(); });
 $("#fChannel").addEventListener("change", e => { state.f.channel = e.target.value; renderList(); });
 
+function inScope(r){
+  const sc = state.f.scope;
+  if(sc === "owned") return !!state.me && r.ownerId === state.me;
+  if(sc === "accepted") return !!state.me && r.acceptedBy === state.me;
+  return true;
+}
+$("#segScope").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { state.f.scope = b.dataset.v; renderList(); }));
 function listFiltered(){
   const f = state.f;
   return state.requests.filter(r => {
+    if(!inScope(r)) return false;
     if(f.status === "__open" && !OPEN.includes(r.status)) return false;
     if(f.status && f.status !== "__open" && r.status !== f.status) return false;
     if(f.team && r.team !== f.team) return false;
     if(f.approving === "__mine" && !myTeams().includes(r.approvingTeam)) return false;
     if(f.approving && f.approving !== "__mine" && r.approvingTeam !== f.approving) return false;
     if(f.channel && !(r.channels || []).includes(f.channel)) return false;
-    if(f.q){ const hay = [r.id, r.title, r.requester, r.owner, r.team].join(" ").toLowerCase(); if(!hay.includes(f.q)) return false; }
+    if(f.q){ const hay = [r.id, r.title, r.requester, ownerName(r), r.team, r.approvingTeam].join(" ").toLowerCase(); if(!hay.includes(f.q)) return false; }
     return true;
   }).sort((a,b) => ((b.status === "New") - (a.status === "New")) || String(a.startDate).localeCompare(String(b.startDate)));
 }
 
 function renderSummary(){
   const counts = Object.fromEntries(STATUSES.map(s => [s, 0]));
-  state.requests.forEach(r => { if(counts[r.status] != null) counts[r.status]++; });
+  state.requests.filter(inScope).forEach(r => { if(counts[r.status] != null) counts[r.status]++; });
+  const showScope = !state.local && !!state.me;
+  $("#scopeBar").hidden = !showScope;
+  if(!showScope && state.f.scope) state.f.scope = "";
+  $("#segScope").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === state.f.scope)));
+  $("#nOwned").textContent = state.me ? state.requests.filter(r => r.ownerId === state.me && OPEN.includes(r.status)).length || "" : "";
+  $("#nAccepted").textContent = state.me ? state.requests.filter(r => r.acceptedBy === state.me).length || "" : "";
   $("#summary").innerHTML = STATUSES.map(s => `<button class="sumpill" data-s="${esc(s)}" aria-pressed="${state.f.status === s}"><b class="${stCls(s)}">${counts[s]}</b>${esc(s)}</button>`).join("");
   $("#summary").querySelectorAll(".sumpill").forEach(b => b.addEventListener("click", () => {
     state.f.status = state.f.status === b.dataset.s ? "" : b.dataset.s; $("#fStatus").value = state.f.status; renderList();
   }));
-  const nb = $("#newBadge"); nb.textContent = counts.New; nb.hidden = !counts.New;
+  const allNew = state.requests.filter(r => r.status === "New").length;
+  const nb = $("#newBadge"); nb.textContent = allNew; nb.hidden = !allNew;
 }
 
 function renderList(){
   renderSummary();
   const rows = listFiltered(), empty = $("#listEmpty");
+  ensureNames(rows.map(r => r.ownerId).filter(Boolean));
   $("#rows").innerHTML = rows.map(r => `
     <tr data-id="${esc(r.id)}" tabindex="0">
       <td class="mono">${esc(r.id)}</td>
@@ -672,14 +699,14 @@ function renderList(){
       <td style="white-space:nowrap">${fmt(r.startDate)}${r.endDate && r.endDate !== r.startDate ? `<div class="sub">to ${fmt(r.endDate)}</div>` : ""}${r.rush && OPEN.includes(r.status) ? ' <span class="flag">Rush</span>' : ""}</td>
       <td class="prio-${esc(r.priority)}">${esc(r.priority)}</td>
       <td><span class="pill ${stCls(r.status)}">${esc(r.status)}</span>${r.status === "New" && !state.local && canAct(r) ? '<div class="sub">Your team to review</div>' : ""}</td>
-      <td>${r.owner ? esc(r.owner) : '<span class="sub">Unassigned</span>'}</td>
+      <td>${ownerName(r) ? esc(ownerName(r)) + (r.ownerId && r.ownerId === state.me ? ' <span class="sub">(you)</span>' : "") : '<span class="sub">Unassigned</span>'}</td>
     </tr>`).join("");
   $("#rows").querySelectorAll("tr").forEach(tr => {
     tr.addEventListener("click", () => openDrawer(tr.dataset.id));
     tr.addEventListener("keydown", e => { if(e.key === "Enter") openDrawer(tr.dataset.id); });
   });
   empty.hidden = rows.length > 0;
-  empty.textContent = !state.loaded ? "Loading requests…" : state.requests.length ? "No requests match these filters." : "No requests yet. Briefs submitted from the New brief tab appear here.";
+  empty.textContent = !state.loaded ? "Loading requests…" : state.requests.length ? (state.f.scope === "owned" ? "You don't own any requests that match. Requests you accept are assigned to you." : state.f.scope === "accepted" ? "You haven't accepted any requests that match." : "No requests match these filters.") : "No requests yet. Briefs submitted from the New brief tab appear here.";
 }
 
 /* ---------- drawer ---------- */
@@ -688,19 +715,30 @@ function closeDrawer(){ state.openId = null; $("#drawer").hidden = true; $("#scr
 $("#scrim").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", e => { if(e.key === "Escape" && state.openId) closeDrawer(); });
 
+function ownerOptions(r, isNew){
+  const members = teamMembers(r.approvingTeam);
+  const current = isNew ? (members.includes(state.me) ? state.me : (r.ownerId || "")) : (r.ownerId || "");
+  const ids = [...members];
+  if(current && !ids.includes(current)) ids.push(current);
+  const opt = (v, label) => `<option value="${esc(v)}" ${v === current ? "selected" : ""}>${esc(label)}</option>`;
+  return opt("", r.owner && !r.ownerId ? r.owner + " (not on team)" : "Unassigned")
+    + ids.map(id => opt(id, nameOf(id) + (id === state.me ? " (you)" : "") + (members.includes(id) ? "" : " (no longer on team)"))).join("");
+}
 function renderDrawer(){
   const r = state.requests.find(x => x.id === state.openId), d = $("#drawer");
   if(!r){ closeDrawer(); return; }
   const row = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
   const isNew = r.status === "New", act = canAct(r);
-  const byline = r.decidedBy ? `<div class="byline">Last updated by ${esc(nameOf(r.decidedBy))} on ${new Date(r.decidedAt).toLocaleString(undefined,{dateStyle:"medium",timeStyle:"short"})}</div>` : "";
+  ensureNames([...teamMembers(r.approvingTeam), r.ownerId, r.acceptedBy].filter(Boolean));
+  const byline = (r.acceptedBy ? `<div class="byline">Accepted by ${esc(nameOf(r.acceptedBy))}${r.acceptedAt ? " on " + new Date(r.acceptedAt).toLocaleDateString() : ""}</div>` : "")
+    + (r.decidedBy ? `<div class="byline">Last updated by ${esc(nameOf(r.decidedBy))} on ${new Date(r.decidedAt).toLocaleString(undefined,{dateStyle:"medium",timeStyle:"short"})}</div>` : "");
   if(r.decidedBy) ensureNames([r.decidedBy]);
   const team = r.approvingTeam ? esc(r.approvingTeam) : "the approving";
   const members = teamMembers(r.approvingTeam);
   const readOnly = `
       <div class="exec">
         <h3 style="font-family:var(--body);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">${isNew ? "Awaiting review" : "Execution"}${r.approvingTeam ? " · " + esc(r.approvingTeam) : ""}</h3>
-        ${isNew ? "" : `<dl class="dl">${row("Owner", esc(r.owner))}${row("Due", r.dueDate ? esc(fmt(r.dueDate)) : "")}${row("Effort", r.effort != null ? esc(r.effort) + " hours" : "")}${row("Team notes", esc(r.execNotes))}${row("Decline reason", esc(r.declineReason))}</dl>`}
+        ${isNew ? "" : `<dl class="dl">${row("Owner", esc(ownerName(r)))}${row("Due", r.dueDate ? esc(fmt(r.dueDate)) : "")}${row("Effort", r.effort != null ? esc(r.effort) + " hours" : "")}${row("Team notes", esc(r.execNotes))}${row("Decline reason", esc(r.declineReason))}</dl>`}
         ${byline}
         <div class="lock"><span>Only members of the <b>${team}</b> team can ${isNew ? "accept or decline this brief" : "update it"}.${members.length ? "" : " Nobody has been added to this team yet. An admin can add people on the Teams tab."}</span></div>
       </div>`;
@@ -719,7 +757,7 @@ function renderDrawer(){
         <h3 style="font-family:var(--body);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">${isNew ? "Review this brief" : "Execution"}${r.approvingTeam ? " · " + esc(r.approvingTeam) : ""}</h3>
         <div class="fields">
           ${isNew ? "" : `<div class="field"><label for="x-status">Status</label><select id="x-status">${STATUSES.map(s => `<option ${s === r.status ? "selected" : ""}>${s}</option>`).join("")}</select></div>`}
-          <div class="field"><label for="x-owner">Owner</label><input type="text" id="x-owner" value="${esc(r.owner)}" placeholder="Who's doing the work"></div>
+          <div class="field"><label for="x-owner">Owner</label><select id="x-owner">${ownerOptions(r, isNew)}</select><span class="hint">${isNew ? "Defaults to you as the person accepting." : "Reassign to anyone on the " + esc(r.approvingTeam || "") + " team."}</span></div>
           <div class="field"><label for="x-due">Internal due date</label><input type="date" id="x-due" value="${esc(r.dueDate)}"></div>
           <div class="field"><label for="x-effort">Estimated effort (hours)</label><input type="number" id="x-effort" min="0" step="1" value="${r.effort ?? ""}"></div>
           <div class="field full" id="chField"><span class="lbl" id="x-ch-lbl">Channels${isNew ? '<span class="req">*</span>' : ""}</span><div class="checks" role="group" aria-labelledby="x-ch-lbl">${CHANNELS.map((c,i) => `<label class="check"><input type="checkbox" id="x-ch-${i}" value="${esc(c)}" ${(r.channels || []).includes(c) ? "checked" : ""}> ${esc(c)}</label>`).join("")}</div><span class="err">Pick at least one channel before accepting.</span></div>
@@ -756,18 +794,18 @@ function renderDrawer(){
   box.addEventListener("input", () => { state.dirty = true; const sb = $("#saveBtn"); if(sb) sb.disabled = false; });
   const st = $("#x-status");
   if(st) st.addEventListener("change", () => { $("#reasonField").hidden = st.value !== "Declined"; });
-  const execVals = () => ({ owner: $("#x-owner").value.trim(), dueDate: $("#x-due").value, effort: $("#x-effort").value === "" ? null : Number($("#x-effort").value), execNotes: $("#x-notes").value.trim(), declineReason: $("#x-reason").value.trim(), channels: [...$("#chField").querySelectorAll("input:checked")].map(i => i.value) });
+  const execVals = () => ({ ownerId: $("#x-owner").value || null, owner: "", dueDate: $("#x-due").value, effort: $("#x-effort").value === "" ? null : Number($("#x-effort").value), execNotes: $("#x-notes").value.trim(), declineReason: $("#x-reason").value.trim(), channels: [...$("#chField").querySelectorAll("input:checked")].map(i => i.value) });
   const needReason = () => { if(!$("#x-reason").value.trim()){ $("#reasonField").hidden = false; $("#reasonField").classList.add("invalid"); $("#x-reason").focus(); return true; } return false; };
   const commit = async (patch, msg) => { const ok = await writeDecision(r.id, patch); if(ok){ state.dirty = false; toast(msg); if(state.local) renderDrawer(); } };
   if(!act){ /* read-only view */ }
   else if(isNew){
-    $("#acceptBtn").addEventListener("click", () => { const f = $("#chField"); if(!f.querySelector("input:checked")){ f.classList.add("invalid"); f.querySelector("input").focus(); return; } f.classList.remove("invalid"); commit({...execVals(), declineReason: "", status: "Accepted", acceptedAt: new Date().toISOString()}, `Accepted ${r.id}`); });
+    $("#acceptBtn").addEventListener("click", () => { const f = $("#chField"); if(!f.querySelector("input:checked")){ f.classList.add("invalid"); f.querySelector("input").focus(); return; } f.classList.remove("invalid"); commit({...execVals(), declineReason: "", status: "Accepted", acceptedAt: new Date().toISOString(), acceptedBy: state.me}, `Accepted ${r.id}`); });
     $("#declineBtn").addEventListener("click", () => { if(needReason()) return; commit({...execVals(), status: "Declined"}, `Declined ${r.id}`); });
   } else {
     $("#saveBtn").addEventListener("click", () => {
       const s = $("#x-status").value;
       if(s === "Declined" && needReason()) return;
-      commit({...execVals(), status: s, acceptedAt: r.acceptedAt || (s === "Declined" ? "" : new Date().toISOString())}, "Changes saved");
+      commit({...execVals(), status: s, acceptedBy: r.acceptedBy || (s === "Declined" ? null : state.me), acceptedAt: r.acceptedAt || (s === "Declined" ? "" : new Date().toISOString())}, "Changes saved");
     });
   }
   if($("#delBtn")) $("#delBtn").addEventListener("click", () => {
