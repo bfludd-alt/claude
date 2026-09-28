@@ -256,11 +256,10 @@ td .sub{color:var(--muted);font-size:12px}
         </fieldset>
 
         <fieldset>
-          <legend><span class="step">4</span>Timing and budget</legend>
+          <legend><span class="step">4</span>Timing</legend>
           <div class="fields">
             <div class="field"><label for="f-start">Go-live date<span class="req">*</span></label><input type="date" id="f-start" name="startDate" required><span class="err" id="startErr">Choose a go-live date.</span></div>
             <div class="field"><label for="f-end">End date</label><input type="date" id="f-end" name="endDate"><span class="hint">Leave blank for a one-day drop.</span><span class="err">The end date must be on or after the go-live date.</span></div>
-            <div class="field"><label for="f-budget">Budget (USD)</label><input type="number" id="f-budget" name="budget" min="0" step="100" inputmode="numeric"></div>
             <div class="field full"><label for="f-notes">Anything else</label><textarea id="f-notes" name="notes" placeholder="Dependencies, legal review, stakeholders to loop in"></textarea></div>
           </div>
         </fieldset>
@@ -275,13 +274,13 @@ td .sub{color:var(--muted);font-size:12px}
       <aside class="aside">
         <div class="card">
           <h3>Lead time</h3>
-          <div class="leadtime" id="leadtime">–<small>business days</small></div>
+          <div class="leadtime" id="leadtime">–<small>hours to go-live</small></div>
           <p class="hint" id="leadnote" style="margin:8px 0 0">Pick a go-live date to see how much time the team has.</p>
         </div>
         <div class="card">
           <h3>Before you submit</h3>
           <ul>
-            <li>Allow 10 business days for new creative. Shorter briefs are flagged as rush.</li>
+            <li>Briefs submitted less than 48 hours before go-live are flagged as rush.</li>
             <li>Name one final approver. Feedback from others goes through them.</li>
             <li>Link final copy and brand assets if you have them.</li>
           </ul>
@@ -348,7 +347,7 @@ const PRIORITIES = ["Low","Medium","High","Urgent"];
 const STATUSES = ["New","Accepted","In progress","In review","Delivered","Declined"];
 const OPEN = ["New","Accepted","In progress","In review"];
 const PALETTE = ["#2E63C9","#C4621B","#1B8A64","#B53C73","#6B4FBF","#8F7010","#1F819A","#7D5A3F","#C23B32","#4F7A1F","#53627A","#A0478F"];
-const RUSH_DAYS = 10;
+const RUSH_HOURS = 48;
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -359,7 +358,8 @@ function parseD(s){ if(!s) return null; const [y,m,d] = s.split("-").map(Number)
 function iso(d){ return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
 function fmt(s){ const d = parseD(s); return d ? d.toLocaleDateString(undefined,{month:"short",day:"numeric",year: d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined}) : "–"; }
 function today0(){ const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }
-function bizDays(from, to){ let n = 0; const d = new Date(from); if(to <= from) return 0; while(d < to){ d.setDate(d.getDate()+1); const w = d.getDay(); if(w !== 0 && w !== 6) n++; } return n; }
+// Hours from now until the start of the go-live day.
+function hoursUntil(d){ return Math.floor((d - new Date()) / 36e5); }
 function endOf(r){ return r.endDate && r.endDate >= r.startDate ? r.endDate : r.startDate; }
 function opts(el, list, allLabel){ el.innerHTML = (allLabel ? `<option value="">${esc(allLabel)}</option>` : `<option value="" disabled selected>Select…</option>`) + list.map(v => `<option>${esc(v)}</option>`).join(""); }
 
@@ -421,11 +421,11 @@ const form = $("#briefForm");
 
 function updateLead(){
   const s = parseD($("#f-start").value), el = $("#leadtime"), note = $("#leadnote");
-  if(!s){ el.innerHTML = "–<small>business days</small>"; note.textContent = "Pick a go-live date to see how much time the team has."; return; }
-  const n = bizDays(today0(), s);
-  el.innerHTML = `${n}<small>business day${n === 1 ? "" : "s"}</small>`;
+  if(!s){ el.innerHTML = "–<small>hours to go-live</small>"; note.textContent = "Pick a go-live date to see how much time the team has."; return; }
+  const h = Math.max(0, hoursUntil(s));
+  el.innerHTML = h < 96 ? `${h}<small>hour${h === 1 ? "" : "s"} to go-live</small>` : `${Math.floor(h / 24)}<small>days to go-live</small>`;
   if(s < today0()) note.innerHTML = `<span class="flag">Past date</span> The go-live date has already passed.`;
-  else if(n < RUSH_DAYS) note.innerHTML = `<span class="flag">Rush</span> Under ${RUSH_DAYS} business days. The team may need to cut scope.`;
+  else if(h < RUSH_HOURS) note.innerHTML = `<span class="flag">Rush</span> Less than ${RUSH_HOURS} hours before go-live. The team may need to cut scope.`;
   else note.textContent = "Standard lead time.";
 }
 $("#f-start").addEventListener("input", updateLead);
@@ -461,8 +461,8 @@ form.addEventListener("submit", async ev => {
     channels: [], copyRequired: $("#f-copy").checked, creativeRequired: $("#f-creative").checked,
     objective: v("#f-objective"), audience: v("#f-audience"), message: v("#f-message"),
     kpis: v("#f-kpis"), links: v("#f-links"), startDate: start, endDate: v("#f-end"),
-    budget: $("#f-budget").value === "" ? null : Number($("#f-budget").value), notes: v("#f-notes"),
-    rush: bizDays(today0(), parseD(start)) < RUSH_DAYS,
+    notes: v("#f-notes"),
+    rush: hoursUntil(parseD(start)) < RUSH_HOURS,
     status: "New", submittedAt: new Date().toISOString(),
     owner: "", dueDate: "", effort: null, execNotes: "", declineReason: "", acceptedAt: ""
   };
@@ -575,7 +575,6 @@ function renderDrawer(){
         ${(r.channels || []).length ? "" : row("Channels", '<span class="sub">Not set yet</span>')}
         ${row("Channels", (r.channels || []).length && `<span class="tags">${(r.channels || []).map(c => `<span class="tag"><span class="sw" style="--c:${colorFor("channel", c)}"></span>${esc(c)}</span>`).join("")}</span>`)}
         ${row("Go-live", esc(fmt(r.startDate)) + (r.endDate && r.endDate !== r.startDate ? " to " + esc(fmt(r.endDate)) : ""))}
-        ${row("Budget", r.budget != null && r.budget !== "" ? "$" + Number(r.budget).toLocaleString() : "")}
         ${row("Objective", esc(r.objective))}
         ${row("Audience", esc(r.audience))}
         ${row("Key message", esc(r.message))}
