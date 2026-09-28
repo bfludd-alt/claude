@@ -229,8 +229,7 @@ td .sub{color:var(--muted);font-size:12px}
           <legend><span class="step">1</span>Requester</legend>
           <div class="fields">
             <div class="field"><label for="f-requester">Your name<span class="req">*</span></label><input type="text" id="f-requester" name="requester" required autocomplete="name"><span class="err">Enter your name.</span></div>
-            <div class="field"><label for="f-email">Work email<span class="req">*</span></label><input type="email" id="f-email" name="email" required autocomplete="email"><span class="err">Enter a valid email address.</span></div>
-            <div class="field"><label for="f-team">Marketing team<span class="req">*</span></label><select id="f-team" name="team" required></select><span class="err">Choose the team making the request.</span></div>
+            <div class="field"><label for="f-team">Requesting team<span class="req">*</span></label><select id="f-team" name="team" required></select><span class="err">Choose the team making the request.</span></div>
             <div class="field"><label for="f-approver">Final approver<span class="req">*</span></label><input type="text" id="f-approver" name="approver" required><span class="hint">Who signs off on the finished work.</span><span class="err">Name the person who approves the work.</span></div>
           </div>
         </fieldset>
@@ -311,7 +310,7 @@ td .sub{color:var(--muted);font-size:12px}
     </div>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>ID</th><th>Request</th><th>Team</th><th>Channels</th><th>Go-live</th><th>Priority</th><th>Status</th><th>Owner</th></tr></thead>
+        <thead><tr><th>ID</th><th>Request</th><th>Requesting team</th><th>Channels</th><th>Go-live</th><th>Priority</th><th>Status</th><th>Owner</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
       <div class="empty" id="listEmpty" hidden></div>
@@ -343,7 +342,7 @@ td .sub{color:var(--muted);font-size:12px}
 <div class="toast" id="toast" hidden role="status"></div>
 
 <script>
-const TEAMS = ["Brand","Product Marketing","Growth","Content","Lifecycle & CRM","Social","Events","Partnerships","Communications"];
+const TEAMS = ["Food","Groceries","Snoomart","Marketplace","Snoonu City","New Ventures","Royal Club","Snoonu Plus"];
 const CHANNELS = ["Email","Organic Social","Paid Social","Paid Search","Display","Website","Video","Events","Print & OOH","PR","SMS & Push","Partner"];
 const TYPES = ["New campaign","Product launch","Asset refresh","Evergreen content","Event support","Other"];
 const PRIORITIES = ["Low","Medium","High","Urgent"];
@@ -437,7 +436,6 @@ function validate(){
   form.querySelectorAll(".field").forEach(f => f.classList.remove("invalid"));
   form.querySelectorAll("[required]").forEach(el => {
     let ok = el.value.trim() !== "";
-    if(ok && el.type === "email") ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(el.value.trim());
     if(!ok){ el.closest(".field").classList.add("invalid"); bad.push(el); }
   });
   const chk = $("#f-channels");
@@ -461,7 +459,7 @@ form.addEventListener("submit", async ev => {
   const v = id => $(id).value.trim();
   const start = v("#f-start");
   const data = {
-    title: v("#f-title"), requester: v("#f-requester"), email: v("#f-email"), team: v("#f-team"), approver: v("#f-approver"),
+    title: v("#f-title"), requester: v("#f-requester"), team: v("#f-team"), approver: v("#f-approver"),
     type: v("#f-type"), priority: v("#f-priority"),
     channels: [...$("#f-channels").querySelectorAll("input:checked")].map(i => i.value),
     objective: v("#f-objective"), audience: v("#f-audience"), message: v("#f-message"), deliverables: v("#f-deliverables"),
@@ -487,7 +485,7 @@ $("#viewReqBtn").addEventListener("click", () => { $("#doneCard").hidden = true;
 /* ---------- list ---------- */
 opts($("#fStatus"), ["Open (not delivered or declined)", ...STATUSES], "All statuses");
 $("#fStatus").options[1].value = "__open";
-opts($("#fTeam"), TEAMS, "All teams"); opts($("#fChannel"), CHANNELS, "All channels");
+opts($("#fTeam"), TEAMS, "All requesting teams"); opts($("#fChannel"), CHANNELS, "All channels");
 $("#q").addEventListener("input", e => { state.f.q = e.target.value.toLowerCase(); renderList(); });
 $("#fStatus").addEventListener("change", e => { state.f.status = e.target.value; renderList(); });
 $("#fTeam").addEventListener("change", e => { state.f.team = e.target.value; renderList(); });
@@ -573,7 +571,7 @@ function renderDrawer(){
         </div>
       </div>
       <div class="dsec"><h3>Brief</h3><dl class="dl">
-        ${row("Team", `<span class="sw" style="--c:${colorFor("team", r.team)}"></span>${esc(r.team)}`)}
+        ${row("Requesting team", `<span class="sw" style="--c:${colorFor("team", r.team)}"></span>${esc(r.team)}`)}
         ${row("Type", esc(r.type))}
         ${row("Channels", `<span class="tags">${(r.channels || []).map(c => `<span class="tag"><span class="sw" style="--c:${colorFor("channel", c)}"></span>${esc(c)}</span>`).join("")}</span>`)}
         ${row("Go-live", esc(fmt(r.startDate)) + (r.endDate && r.endDate !== r.startDate ? " to " + esc(fmt(r.endDate)) : ""))}
@@ -587,7 +585,7 @@ function renderDrawer(){
         ${row("Notes", esc(r.notes))}
       </dl></div>
       <div class="dsec"><h3>Requester</h3><dl class="dl">
-        ${row("Name", esc(r.requester))}${row("Email", esc(r.email))}${row("Approver", esc(r.approver))}
+        ${row("Name", esc(r.requester))}${row("Approver", esc(r.approver))}
       </dl></div>
       <div class="dsec" id="delBox"><button class="btn danger small" id="delBtn">Delete request</button></div>
     </div>`;
