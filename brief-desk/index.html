@@ -230,7 +230,7 @@ td .sub{color:var(--muted);font-size:12px}
           <div class="fields">
             <div class="field"><label for="f-requester">Your name<span class="req">*</span></label><input type="text" id="f-requester" name="requester" required autocomplete="name"><span class="err">Enter your name.</span></div>
             <div class="field"><label for="f-team">Requesting team<span class="req">*</span></label><select id="f-team" name="team" required></select><span class="err">Choose the team making the request.</span></div>
-            <div class="field"><label for="f-approver">Final approver<span class="req">*</span></label><input type="text" id="f-approver" name="approver" required><span class="hint">Who signs off on the finished work.</span><span class="err">Name the person who approves the work.</span></div>
+            <div class="field"><label for="f-approving">Approving team<span class="req">*</span></label><select id="f-approving" name="approvingTeam" required></select><span class="hint">The team that reviews and accepts this brief.</span><span class="err">Choose the team that needs to accept the brief.</span></div>
           </div>
         </fieldset>
 
@@ -281,7 +281,7 @@ td .sub{color:var(--muted);font-size:12px}
           <h3>Before you submit</h3>
           <ul>
             <li>Briefs submitted less than 48 hours before go-live are flagged as rush.</li>
-            <li>Name one final approver. Feedback from others goes through them.</li>
+            <li>Choose the approving team. That team reviews the brief and accepts or declines it.</li>
             <li>Link final copy and brand assets if you have them.</li>
           </ul>
         </div>
@@ -303,12 +303,13 @@ td .sub{color:var(--muted);font-size:12px}
     <div class="toolbar">
       <input type="search" id="q" placeholder="Search by name, ID, requester or owner" aria-label="Search requests">
       <select id="fStatus" aria-label="Status"></select>
-      <select id="fTeam" aria-label="Team"></select>
+      <select id="fApproving" aria-label="Approving team"></select>
+      <select id="fTeam" aria-label="Requesting team"></select>
       <select id="fChannel" aria-label="Channel"></select>
     </div>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>ID</th><th>Request</th><th>Requesting team</th><th>Channels</th><th>Go-live</th><th>Priority</th><th>Status</th><th>Owner</th></tr></thead>
+        <thead><tr><th>ID</th><th>Request</th><th>Approving team</th><th>Requesting team</th><th>Channels</th><th>Go-live</th><th>Priority</th><th>Status</th><th>Owner</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
       <div class="empty" id="listEmpty" hidden></div>
@@ -340,6 +341,7 @@ td .sub{color:var(--muted);font-size:12px}
 <div class="toast" id="toast" hidden role="status"></div>
 
 <script>
+const APPROVING_TEAMS = ["CRM","Loyalty","Social Media","Digital Marketing","PR","Print & OOH"];
 const TEAMS = ["Food","Groceries","Snoomart","Marketplace","Snoonu City","New Ventures","Royal Club","Snoonu Plus"];
 const CHANNELS = ["Email","Organic Social","Paid Social","Paid Search","Display","Website","Video","Events","Print & OOH","PR","SMS & Push","Partner"];
 const TYPES = ["New campaign","Product launch","Asset refresh","Evergreen content","Event support","Other"];
@@ -366,7 +368,7 @@ function opts(el, list, allLabel){ el.innerHTML = (allLabel ? `<option value="">
 const state = {
   requests: [], db: null, loaded: false, local: false,
   tab: "form",
-  f: { q: "", status: "", team: "", channel: "" },
+  f: { q: "", status: "", team: "", approving: "", channel: "" },
   cal: { month: (() => { const t = today0(); return new Date(t.getFullYear(), t.getMonth(), 1); })(), view: "month", by: "team", team: "", channel: "", hideDec: true },
   openId: null, dirty: false
 };
@@ -416,7 +418,7 @@ function setTab(t){
 document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
 
 /* ---------- form ---------- */
-opts($("#f-team"), TEAMS); opts($("#f-type"), TYPES); opts($("#f-priority"), PRIORITIES);
+opts($("#f-team"), TEAMS); opts($("#f-approving"), APPROVING_TEAMS); opts($("#f-type"), TYPES); opts($("#f-priority"), PRIORITIES);
 const form = $("#briefForm");
 
 function updateLead(){
@@ -456,7 +458,7 @@ form.addEventListener("submit", async ev => {
   const v = id => $(id).value.trim();
   const start = v("#f-start");
   const data = {
-    title: v("#f-title"), requester: v("#f-requester"), team: v("#f-team"), approver: v("#f-approver"),
+    title: v("#f-title"), requester: v("#f-requester"), team: v("#f-team"), approvingTeam: v("#f-approving"),
     type: v("#f-type"), priority: v("#f-priority"),
     channels: [], copyRequired: $("#f-copy").checked, creativeRequired: $("#f-creative").checked,
     objective: v("#f-objective"), audience: v("#f-audience"), message: v("#f-message"),
@@ -482,10 +484,11 @@ $("#viewReqBtn").addEventListener("click", () => { $("#doneCard").hidden = true;
 /* ---------- list ---------- */
 opts($("#fStatus"), ["Open (not delivered or declined)", ...STATUSES], "All statuses");
 $("#fStatus").options[1].value = "__open";
-opts($("#fTeam"), TEAMS, "All requesting teams"); opts($("#fChannel"), CHANNELS, "All channels");
+opts($("#fTeam"), TEAMS, "All requesting teams"); opts($("#fApproving"), APPROVING_TEAMS, "All approving teams"); opts($("#fChannel"), CHANNELS, "All channels");
 $("#q").addEventListener("input", e => { state.f.q = e.target.value.toLowerCase(); renderList(); });
 $("#fStatus").addEventListener("change", e => { state.f.status = e.target.value; renderList(); });
 $("#fTeam").addEventListener("change", e => { state.f.team = e.target.value; renderList(); });
+$("#fApproving").addEventListener("change", e => { state.f.approving = e.target.value; renderList(); });
 $("#fChannel").addEventListener("change", e => { state.f.channel = e.target.value; renderList(); });
 
 function listFiltered(){
@@ -494,6 +497,7 @@ function listFiltered(){
     if(f.status === "__open" && !OPEN.includes(r.status)) return false;
     if(f.status && f.status !== "__open" && r.status !== f.status) return false;
     if(f.team && r.team !== f.team) return false;
+    if(f.approving && r.approvingTeam !== f.approving) return false;
     if(f.channel && !(r.channels || []).includes(f.channel)) return false;
     if(f.q){ const hay = [r.id, r.title, r.requester, r.owner, r.team].join(" ").toLowerCase(); if(!hay.includes(f.q)) return false; }
     return true;
@@ -517,6 +521,7 @@ function renderList(){
     <tr data-id="${esc(r.id)}" tabindex="0">
       <td class="mono">${esc(r.id)}</td>
       <td><div class="t">${esc(r.title)}${r.example ? '<span class="sample">Sample</span>' : ""}</div><div class="sub">${esc(r.requester)} · ${esc(r.type)}${needs(r).length ? " · Needs " + needs(r).join(" + ") : ""}</div></td>
+      <td>${r.approvingTeam ? esc(r.approvingTeam) : '<span class="sub">Not set</span>'}</td>
       <td><span class="sw" style="--c:${colorFor("team", r.team)}"></span>${esc(r.team)}</td>
       <td>${(r.channels || []).length ? `<div class="tags">${r.channels.map(c => `<span class="tag">${esc(c)}</span>`).join("")}</div>` : '<span class="sub">Not set</span>'}</td>
       <td style="white-space:nowrap">${fmt(r.startDate)}${r.endDate && r.endDate !== r.startDate ? `<div class="sub">to ${fmt(r.endDate)}</div>` : ""}${r.rush && OPEN.includes(r.status) ? ' <span class="flag">Rush</span>' : ""}</td>
@@ -554,7 +559,7 @@ function renderDrawer(){
     </div>
     <div class="dbody">
       <div class="exec" id="execBox">
-        <h3 style="font-family:var(--body);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">${isNew ? "Review this brief" : "Execution"}</h3>
+        <h3 style="font-family:var(--body);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">${isNew ? "Review this brief" : "Execution"}${r.approvingTeam ? " · " + esc(r.approvingTeam) : ""}</h3>
         <div class="fields">
           ${isNew ? "" : `<div class="field"><label for="x-status">Status</label><select id="x-status">${STATUSES.map(s => `<option ${s === r.status ? "selected" : ""}>${s}</option>`).join("")}</select></div>`}
           <div class="field"><label for="x-owner">Owner</label><input type="text" id="x-owner" value="${esc(r.owner)}" placeholder="Who's doing the work"></div>
@@ -583,7 +588,7 @@ function renderDrawer(){
         ${row("Notes", esc(r.notes))}
       </dl></div>
       <div class="dsec"><h3>Requester</h3><dl class="dl">
-        ${row("Name", esc(r.requester))}${row("Approver", esc(r.approver))}
+        ${row("Name", esc(r.requester))}${row("Approving team", esc(r.approvingTeam))}
       </dl></div>
       <div class="dsec" id="delBox"><button class="btn danger small" id="delBtn">Delete request</button></div>
     </div>`;
