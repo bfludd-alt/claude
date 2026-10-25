@@ -1,0 +1,6 @@
+id,name,tier,parent_id,vertical,campaign_type,start_date,end_date,status,owner,channels,brief,target_audience,goal,kpis,key_message,top_highlights,budget_qar,notes
+SM-001,11.11,Seasonal Moment,,Cross-vertical,,2026-11-11,2026-11-11,Planning,,,,,,,,,,
+SM-002,Qatar Grand Prix weekend,Seasonal Moment,,Cross-vertical,,2026-11-27,2026-11-29,Planning,,,,,,,,,,
+SM-003,White Friday,Seasonal Moment,,Cross-vertical,,2026-11-27,2026-11-30,Planning,,,,,,,,,,
+SM-004,Cyber Monday,Seasonal Moment,,Cross-vertical,,2026-11-30,2026-11-30,Planning,,,,,,,,,,
+SM-005,Flu season,Seasonal Moment,,Cross-vertical,,2026-10-01,2026-11-30,Live,,,,,,,,,,

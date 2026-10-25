@@ -1,0 +1,5 @@
+id,name,tier,parent_id,vertical,campaign_type,start_date,end_date,status,owner,channels,brief,target_audience,goal,kpis,key_message,top_highlights,budget_qar,notes
+SM-003,White Friday (duplicate of the real file),Seasonal Moment,,Cross-vertical,,2026-11-27,2026-11-30,Planning,,,,,,,,,,
+SM-010,National Day,Seasonal Moment,,Cross-vertical,,2026-12-18,2026-12-16,Idea,,,,,,,,,,
+SMK-BC-099,Campaign in the moments file,Brand Campaign,,S Market,Hero,2026-12-01,2026-12-10,Idea,,,,,,,,,,
+,,Seasonal Moment,,Cross-vertical,,,,,,,,,,,,,,

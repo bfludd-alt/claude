@@ -1,0 +1,776 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marketing Tracker</title>
+<script>
+/* ============================================================
+   CONFIG — edit this block to point the tracker at your data.
+   ============================================================
+   mode: "local" — drag CSV files onto the page or pick them with the file
+                   picker. The last loaded files are remembered in this
+                   browser until you press "Clear data".
+         "urls"  — fetch every entry in `sources` on load. Use the CSV link
+                   from Google Sheets: File > Share > Publish to web >
+                   (pick the Initiatives tab) > Comma-separated values.
+   kind (optional, per source): "moments" or "vertical". Leave it out and
+   the tracker works it out from the rows.
+*/
+const CONFIG = {
+  mode: "local",
+  sources: [
+    // { label: "Seasonal Moments", url: "https://docs.google.com/spreadsheets/d/e/.../pub?gid=0&single=true&output=csv", kind: "moments" },
+    // { label: "S Market",         url: "https://docs.google.com/spreadsheets/d/e/.../pub?gid=0&single=true&output=csv" },
+  ],
+};
+</script>
+<style>
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --border: #dfe3e8;
+  --border-strong: #c5ccd5;
+  --text: #17202b;
+  --text-2: #5a6573;
+  --text-3: #8a94a1;
+  --accent: #1f6feb;
+  --error: #c62828;
+  --error-bg: #fdecec;
+  --warn: #a35c00;
+  --warn-bg: #fff4e0;
+  --ok: #1b7a3a;
+  --radius: 8px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
+
+  /* Vertical colours (bars, legend, chips) */
+  --v-smk: #2563eb;
+  --v-rst: #dc2626;
+  --v-snm: #d97706;
+  --v-grc: #16a34a;
+  --v-sld: #0891b2;
+  --v-srv: #7c3aed;
+  --v-nvt: #db2777;
+  --v-cvt: #475569;
+  --v-unknown: #9ca3af;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+button, input, select { font: inherit; color: inherit; }
+button {
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+button:hover { background: var(--surface-2); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover { filter: brightness(1.08); }
+button.link { border: 0; background: none; padding: 0; color: var(--accent); }
+button.link:hover { text-decoration: underline; background: none; }
+
+/* ---------- Header ---------- */
+.app-header {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 20;
+}
+.app-header h1 { font-size: 17px; margin: 0; font-weight: 650; letter-spacing: -.01em; }
+.app-header .spacer { flex: 1; }
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 6px 14px; }
+.seg button + button { border-left: 1px solid var(--border-strong); }
+.seg button[aria-pressed="true"] { background: var(--text); color: #fff; }
+.issue-badge {
+  display: inline-flex; gap: 6px; align-items: center;
+}
+.count { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 10px; font-size: 12px; font-weight: 600; text-align: center; }
+.count.error { background: var(--error-bg); color: var(--error); }
+.count.warning { background: var(--warn-bg); color: var(--warn); }
+.count.zero { background: var(--surface-2); color: var(--text-3); }
+
+main { padding: 16px 20px 40px; max-width: 1600px; margin: 0 auto; }
+
+/* ---------- Cards ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+}
+.card > header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.card > header h2 { font-size: 14px; margin: 0; font-weight: 650; }
+.card > header .spacer { flex: 1; }
+.card.collapsed > :not(header) { display: none; }
+.card.collapsed > header { border-bottom: 0; }
+.chev { display: inline-block; transition: transform .15s; color: var(--text-3); }
+.card.collapsed .chev { transform: rotate(-90deg); }
+.card-toggle { border: 0; background: none; padding: 0; display: flex; gap: 8px; align-items: center; }
+.card-toggle:hover { background: none; }
+
+table.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.grid th, table.grid td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+table.grid th { font-weight: 600; color: var(--text-2); background: var(--surface-2); position: sticky; top: 0; z-index: 1; white-space: nowrap; }
+table.grid tr:last-child td { border-bottom: 0; }
+table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.muted { color: var(--text-2); }
+.faint { color: var(--text-3); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: nowrap; }
+.scroll { overflow: auto; max-height: 420px; }
+
+/* ---------- Loader ---------- */
+.loader-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.dropzone {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 48px 20px;
+  text-align: center;
+  background: var(--surface);
+}
+.dropzone h2 { margin: 0 0 6px; font-size: 18px; }
+.dropzone p { margin: 0 0 16px; color: var(--text-2); }
+.drop-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(31, 111, 235, .12);
+  border: 3px dashed var(--accent);
+  display: none; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 600; color: var(--accent);
+  pointer-events: none;
+}
+body.dragging .drop-overlay { display: flex; }
+.kind-tag { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); white-space: nowrap; }
+.load-error { color: var(--error); }
+
+/* ---------- Issues ---------- */
+.issue-filters { display: inline-flex; gap: 4px; }
+.issue-filters button { padding: 2px 10px; font-size: 12px; border-radius: 12px; }
+.issue-filters button[aria-pressed="true"] { background: var(--text); color: #fff; border-color: var(--text); }
+.sev { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 1px 6px; border-radius: 4px; }
+.sev.error { color: var(--error); background: var(--error-bg); }
+.sev.warning { color: var(--warn); background: var(--warn-bg); }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: #f7f9fc; }
+.empty-note { padding: 14px; color: var(--text-2); }
+
+/* ---------- Data table ---------- */
+tr.has-error td:first-child { box-shadow: inset 3px 0 0 var(--error); }
+tr.has-warning td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+tr.flash td { animation: flash 1.6s ease-out; }
+@keyframes flash { from { background: #fff3b0; } to { background: transparent; } }
+.vdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+.bad-value { color: var(--error); text-decoration: underline wavy var(--error); text-underline-offset: 3px; }
+
+.placeholder { padding: 40px; text-align: center; color: var(--text-2); }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="drop-overlay">Drop CSV files to load them</div>
+
+<header class="app-header">
+  <h1>Marketing Tracker</h1>
+  <div class="seg" role="group" aria-label="View">
+    <button data-view="month" aria-pressed="false">Month</button>
+    <button data-view="week" aria-pressed="false">Week</button>
+    <button data-view="data" aria-pressed="true">Data</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="loader-bar" id="loaderBar"></div>
+  <input type="file" id="filePicker" accept=".csv,text/csv" multiple hidden>
+</header>
+
+<main>
+  <section id="emptyState" class="dropzone hidden">
+    <h2>Load your marketing plan</h2>
+    <p>Drop the CSV exports here: the shared Seasonal Moments file plus one file per vertical.</p>
+    <button class="primary" data-action="pick">Choose CSV files</button>
+  </section>
+
+  <section id="sourcesCard" class="card hidden">
+    <header>
+      <button class="card-toggle" data-toggle="sourcesCard"><span class="chev">▾</span><h2>Loaded sources</h2></button>
+      <span class="muted" id="sourcesSummary"></span>
+    </header>
+    <div id="sourcesBody"></div>
+  </section>
+
+  <section id="issuesCard" class="card hidden">
+    <header>
+      <button class="card-toggle" data-toggle="issuesCard"><span class="chev">▾</span><h2>Data issues</h2></button>
+      <span class="issue-badge" id="issuesCounts"></span>
+      <div class="spacer"></div>
+      <div class="issue-filters" id="issueFilters">
+        <button data-sev="all" aria-pressed="true">All</button>
+        <button data-sev="error" aria-pressed="false">Errors</button>
+        <button data-sev="warning" aria-pressed="false">Warnings</button>
+      </div>
+    </header>
+    <div class="scroll" id="issuesBody"></div>
+  </section>
+
+  <section id="viewMonth" class="card view hidden"><div class="placeholder">Monthly roadmap: built in step 2.</div></section>
+  <section id="viewWeek" class="card view hidden"><div class="placeholder">Weekly view: built in step 3.</div></section>
+  <section id="viewData" class="card view hidden">
+    <header><h2>All initiatives</h2><span class="muted" id="dataSummary"></span></header>
+    <div class="scroll" style="max-height:none" id="dataBody"></div>
+  </section>
+</main>
+
+<script>
+/* CORE:BEGIN — pure data logic, no DOM. tools/check.mjs runs this block in Node. */
+
+const COLUMNS = [
+  "id", "name", "tier", "parent_id", "vertical", "campaign_type",
+  "start_date", "end_date", "status", "owner", "channels",
+  "brief", "target_audience", "goal", "kpis", "key_message", "top_highlights",
+  "budget_qar", "notes",
+];
+
+const MOMENT = "Seasonal Moment";
+const BRAND = "Brand Campaign";
+const TACTICAL = "Tactical Campaign";
+
+// Keep in sync with tools/build_templates.py
+const ALLOWED = {
+  tier: [MOMENT, BRAND, TACTICAL],
+  vertical: ["S Market", "Restaurants", "Snoomart", "Grocery", "SLaundry", "Services", "New Ventures", "Cross-vertical"],
+  campaign_type: ["Hero", "Promo", "Tactical", "Occasion", "Recurrent", "USP", "Segmented", "Engagement", "Adoption", "Habit Builder"],
+  status: ["Idea", "Planning", "Live", "Complete", "Paused"],
+};
+
+const VERTICAL_CODES = {
+  "S Market": "SMK", "Restaurants": "RST", "Snoomart": "SNM", "Grocery": "GRC",
+  "SLaundry": "SLD", "Services": "SRV", "New Ventures": "NVT", "Cross-vertical": "CVT",
+};
+const TIER_ID_CODES = { [BRAND]: "BC", [TACTICAL]: "TC" };
+
+/* ---------- CSV ---------- */
+
+// RFC 4180: quoted cells may hold commas, line breaks and "" (an escaped quote).
+// Returns { records: string[][], unterminated: boolean }.
+function parseCSV(text) {
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  text = text.replace(/\r\n?/g, "\n");
+  const records = [];
+  let rec = [], field = "", inQuotes = false, fieldStarted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else if (c === '"' && !fieldStarted) {
+      inQuotes = true; fieldStarted = true;
+    } else if (c === ",") {
+      rec.push(field); field = ""; fieldStarted = false;
+    } else if (c === "\n") {
+      rec.push(field); records.push(rec);
+      rec = []; field = ""; fieldStarted = false;
+    } else {
+      field += c; fieldStarted = true;
+    }
+  }
+  if (fieldStarted || rec.length) { rec.push(field); records.push(rec); }
+  return { records, unterminated: inQuotes };
+}
+
+/* ---------- Dates (whole days since 1970-01-01, UTC; no time zones) ---------- */
+
+const DAY_MS = 86400000;
+
+function parseISODate(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return null;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+  return dt.getTime() / DAY_MS;
+}
+function dayToDate(n) { return new Date(n * DAY_MS); }
+function dayToISO(n) { return dayToDate(n).toISOString().slice(0, 10); }
+function dayFromYMD(y, m, d) { return Date.UTC(y, m, d) / DAY_MS; }       // m is 0-based
+function weekday(n) { return ((n + 4) % 7 + 7) % 7; }                     // 0 = Sunday
+function weekStart(n) { return n - weekday(n); }                          // weeks run Sun..Sat
+function todayDay() { const t = new Date(); return dayFromYMD(t.getFullYear(), t.getMonth(), t.getDate()); }
+
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function fmtDay(n) { const d = dayToDate(n); return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}`; }
+function fmtDayShort(n) { const d = dayToDate(n); return `${DAYS_SHORT[weekday(n)]} ${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`; }
+
+/* ---------- Load + merge + validate ---------- */
+
+function normHeader(h) { return h.trim().toLowerCase().replace(/[\s-]+/g, "_"); }
+
+// Case- and spacing-insensitive match against an allowed list.
+// Returns the canonical value, "" for blank, or null if not allowed.
+function canonical(list, value) {
+  const v = value.trim().replace(/\s+/g, " ");
+  if (!v) return "";
+  const lower = v.toLowerCase();
+  return list.find(x => x.toLowerCase() === lower) ?? null;
+}
+
+function looksLikeDate(s) { return /\d{1,4}[\/.\-]\d{1,2}[\/.\-]\d{1,4}/.test(s); }
+
+/**
+ * sources: [{ label, text, origin: "file"|"url", kind?: "moments"|"vertical", loadError? }]
+ * Returns { rows, byKey, byId, issues, sources }.
+ * Every non-blank CSV row becomes a row object, whatever its problems.
+ */
+function buildDataset(sources) {
+  const rows = [];
+  const issues = [];
+  const summaries = [];
+
+  const addIssue = (severity, src, row, field, message) => {
+    const issue = {
+      severity, field, message,
+      source: src.label,
+      sheetRow: row ? row._sheetRow : null,
+      id: row ? row.id : "",
+      rowKey: row ? row._key : null,
+    };
+    issues.push(issue);
+    if (row) row._issues.push(issue);
+    return issue;
+  };
+
+  sources.forEach((src, sourceIdx) => {
+    const summary = {
+      label: src.label, origin: src.origin, kind: src.kind || null, kindInferred: !src.kind,
+      rowCount: 0, blankRows: 0, errors: 0, warnings: 0, loadError: src.loadError || null,
+    };
+    summaries.push(summary);
+    if (src.loadError) { addIssue("error", src, null, null, `Could not load: ${src.loadError}`); return; }
+
+    const { records, unterminated } = parseCSV(src.text || "");
+    if (unterminated) addIssue("error", src, null, null, "File ends inside a quoted cell (a \" is missing its closing quote). The last row may be incomplete.");
+    if (!records.length || records[0].every(c => !c.trim())) {
+      addIssue("error", src, null, null, "File is empty or has no header row.");
+      return;
+    }
+
+    const header = records[0].map(normHeader);
+    const colIndex = {};
+    header.forEach((h, i) => { if (h && !(h in colIndex)) colIndex[h] = i; });
+    const missing = COLUMNS.filter(c => !(c in colIndex));
+    const extra = header.filter(h => h && !COLUMNS.includes(h));
+    if (missing.length) addIssue("error", src, null, null, `Header is missing column${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}`);
+    if (extra.length) addIssue("warning", src, null, null, `Header has unknown column${extra.length > 1 ? "s" : ""} (ignored): ${extra.join(", ")}`);
+
+    const fileRows = [];
+    for (let r = 1; r < records.length; r++) {
+      const cells = records[r];
+      const get = c => (c in colIndex ? (cells[colIndex[c]] ?? "") : "").trim();
+      const values = {};
+      COLUMNS.forEach(c => { values[c] = get(c); });
+
+      // Blank rows, including template rows where only the pre-filled tier/vertical are set.
+      // Anything else (even content only in unknown columns) is kept so it gets flagged.
+      const knownIdx = new Set(["tier", "vertical"].map(c => colIndex[c]));
+      const hasContent = cells.some((c, i) => c.trim() && !knownIdx.has(i));
+      if (!hasContent) { summary.blankRows++; continue; }
+
+      const row = {
+        ...values,
+        _key: `${sourceIdx}:${r + 1}`,
+        _source: src.label,
+        _sourceIdx: sourceIdx,
+        _sheetRow: r + 1,       // header is sheet row 1
+        _issues: [],
+        _parent: null,
+        _children: [],
+      };
+      if (cells.length > header.length && cells.slice(header.length).some(c => c.trim())) {
+        addIssue("warning", src, row, null, `Row has ${cells.length} cells but the header has ${header.length}; the extra cells were ignored. Check for a missing quote.`);
+      }
+      fileRows.push(row);
+    }
+    summary.rowCount = fileRows.length;
+
+    // Work out what kind of file this is
+    if (!summary.kind) {
+      const moments = fileRows.filter(r => canonical(ALLOWED.tier, r.tier) === MOMENT).length;
+      summary.kind = fileRows.length && moments > fileRows.length / 2 ? "moments" : "vertical";
+    }
+    fileRows.forEach(r => { r._fileKind = summary.kind; });
+    rows.push(...fileRows);
+  });
+
+  /* ---- Per-row checks ---- */
+  const srcOf = r => sources[r._sourceIdx];
+  for (const r of rows) {
+    const src = srcOf(r);
+
+    if (!r.id) addIssue("error", src, r, "id", "Missing id.");
+    if (!r.name) addIssue("error", src, r, "name", "Missing name.");
+
+    // Allowed values
+    for (const field of ["tier", "vertical", "campaign_type", "status"]) {
+      const raw = r[field];
+      const c = canonical(ALLOWED[field], raw);
+      if (c === null) {
+        addIssue("error", src, r, field, `${field} "${raw}" is not an allowed value. Allowed: ${ALLOWED[field].join(", ")}.`);
+        r[`_bad_${field}`] = true;
+      } else {
+        r[field] = c;
+        if (!c) {
+          const required = field === "tier" || field === "vertical" || field === "status" || (field === "campaign_type" && r.tier && r.tier !== MOMENT);
+          if (required) addIssue("error", src, r, field, `Missing ${field}.`);
+        }
+      }
+    }
+
+    // Tier vs file kind
+    if (r.tier === MOMENT && r._fileKind === "vertical") {
+      addIssue("error", src, r, "tier", "Seasonal moment found in a vertical file. Moments belong only in the shared Seasonal Moments sheet.");
+    } else if ((r.tier === BRAND || r.tier === TACTICAL) && r._fileKind === "moments") {
+      addIssue("error", src, r, "tier", `${r.tier} found in the Seasonal Moments file. Campaigns belong in their vertical's sheet.`);
+    }
+
+    // Dates
+    r._start = null; r._end = null;
+    for (const [field, key] of [["start_date", "_start"], ["end_date", "_end"]]) {
+      const raw = r[field];
+      if (!raw) { addIssue("error", src, r, field, `Missing ${field}.`); continue; }
+      const d = parseISODate(raw);
+      if (d === null) {
+        const hint = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? "is not a real calendar date" : looksLikeDate(raw) ? "must be in YYYY-MM-DD format" : "is not a date";
+        addIssue("error", src, r, field, `${field} "${raw}" ${hint}.`);
+        r[`_bad_${field}`] = true;
+      } else r[key] = d;
+    }
+    if (r._start !== null && r._end !== null && r._end < r._start) {
+      addIssue("error", src, r, "end_date", `end_date ${r.end_date} is before start_date ${r.start_date}.`);
+      r._bad_end_date = true;
+    }
+
+    // id format (warning)
+    if (r.id && r.tier) {
+      if (r.tier === MOMENT) {
+        if (!/^SM-\d{3,}$/i.test(r.id)) addIssue("warning", src, r, "id", `id "${r.id}" doesn't follow the SM-001 pattern for seasonal moments.`);
+      } else if (VERTICAL_CODES[r.vertical]) {
+        const code = VERTICAL_CODES[r.vertical], tc = TIER_ID_CODES[r.tier];
+        if (!new RegExp(`^${code}-${tc}-\\d{3,}$`, "i").test(r.id)) {
+          addIssue("warning", src, r, "id", `id "${r.id}" doesn't follow ${code}-${tc}-001 for a ${r.tier} in ${r.vertical}.`);
+        }
+      }
+    }
+
+    // Budget (warning)
+    r._budget = null;
+    if (r.budget_qar) {
+      const n = Number(r.budget_qar.replace(/[,\s]/g, "").replace(/^QAR/i, ""));
+      if (Number.isFinite(n)) r._budget = n;
+      else addIssue("warning", src, r, "budget_qar", `budget_qar "${r.budget_qar}" is not a number.`);
+    }
+
+    r._channels = r.channels ? r.channels.split(";").map(s => s.trim()).filter(Boolean) : [];
+  }
+
+  /* ---- Cross-row checks ---- */
+  const byKey = new Map(rows.map(r => [r._key, r]));
+  const byId = new Map();   // UPPERCASE id -> [rows], in load order
+  for (const r of rows) {
+    if (!r.id) continue;
+    const k = r.id.toUpperCase();
+    if (!byId.has(k)) byId.set(k, []);
+    byId.get(k).push(r);
+  }
+  const where = r => `${r._source} row ${r._sheetRow}`;
+  for (const [, list] of byId) {
+    if (list.length < 2) continue;
+    for (const r of list) {
+      const others = list.filter(o => o !== r).map(where).join("; ");
+      addIssue("error", srcOf(r), r, "id", `Duplicate id "${r.id}": also used in ${others}.`);
+    }
+  }
+
+  for (const r of rows) {
+    const src = srcOf(r);
+    if (!r.parent_id) {
+      if (r.tier === TACTICAL) addIssue("warning", src, r, "parent_id", "Tactical campaign has no parent. Link it to a brand campaign or seasonal moment.");
+      continue;
+    }
+    if (r.tier === MOMENT) {
+      addIssue("warning", src, r, "parent_id", `Seasonal moments don't have parents; parent_id "${r.parent_id}" is ignored.`);
+      continue;
+    }
+    const candidates = byId.get(r.parent_id.toUpperCase());
+    if (!candidates) {
+      addIssue("error", src, r, "parent_id", `parent_id "${r.parent_id}" doesn't match any id in the loaded files.`);
+      r._bad_parent_id = true;
+      continue;
+    }
+    const p = candidates[0];
+    if (p === r) { addIssue("error", src, r, "parent_id", "Row is its own parent."); r._bad_parent_id = true; continue; }
+    r._parent = p._key;
+    p._children.push(r._key);
+
+    if (r.tier === BRAND && p.tier !== MOMENT) {
+      addIssue("warning", src, r, "parent_id", `Brand campaign's parent should be a seasonal moment, but ${p.id} is a ${p.tier || "row with no tier"}.`);
+    } else if (r.tier === TACTICAL && p.tier !== MOMENT && p.tier !== BRAND) {
+      addIssue("warning", src, r, "parent_id", `Tactical campaign's parent should be a brand campaign or seasonal moment, but ${p.id} is a ${p.tier || "row with no tier"}.`);
+    }
+
+    if (r._start !== null && r._end !== null && p._start !== null && p._end !== null &&
+        (r._start < p._start || r._end > p._end)) {
+      const parts = [];
+      if (r._start < p._start) parts.push(`starts ${r.start_date}, before its parent starts (${p.start_date})`);
+      if (r._end > p._end) parts.push(`ends ${r.end_date}, after its parent ends (${p.end_date})`);
+      addIssue("warning", src, r, "start_date", `Dates fall outside parent ${p.id} "${p.name}": ${parts.join("; ")}.`);
+    }
+  }
+
+  // Counts per source
+  for (const i of issues) {
+    const s = summaries.find(x => x.label === i.source);
+    if (s) s[i.severity === "error" ? "errors" : "warnings"]++;
+  }
+  // Sort: file-level first, then by source order and row
+  const order = new Map(sources.map((s, i) => [s.label, i]));
+  issues.sort((a, b) => (order.get(a.source) - order.get(b.source)) || ((a.sheetRow ?? 0) - (b.sheetRow ?? 0)) || (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1));
+
+  return { rows, byKey, byId, issues, sources: summaries };
+}
+
+/* CORE:END */
+</script>
+
+<script>
+/* ================= UI ================= */
+
+const STORAGE_KEY = "marketingTracker.localSources.v1";
+const VERTICAL_VAR = {
+  "S Market": "--v-smk", "Restaurants": "--v-rst", "Snoomart": "--v-snm", "Grocery": "--v-grc",
+  "SLaundry": "--v-sld", "Services": "--v-srv", "New Ventures": "--v-nvt", "Cross-vertical": "--v-cvt",
+};
+const verticalColor = v => `var(${VERTICAL_VAR[v] || "--v-unknown"})`;
+
+const state = {
+  sources: [],          // [{ label, text, origin, kind?, loadError? }]
+  data: null,           // result of buildDataset
+  view: "data",
+  issueFilter: "all",
+};
+
+const $ = sel => document.querySelector(sel);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* ---------- Loading ---------- */
+
+function storageGet() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch { return null; }
+}
+function storageSet(v) {
+  try { v ? localStorage.setItem(STORAGE_KEY, JSON.stringify(v)) : localStorage.removeItem(STORAGE_KEY); } catch { /* storage unavailable */ }
+}
+
+async function addFiles(fileList) {
+  const files = [...fileList].filter(f => /\.csv$/i.test(f.name) || f.type === "text/csv");
+  if (!files.length) return;
+  const loaded = await Promise.all(files.map(f => f.text().then(
+    text => ({ label: f.name, text, origin: "file" }),
+    err => ({ label: f.name, text: "", origin: "file", loadError: String(err) }),
+  )));
+  // A file with the same name replaces the earlier one, so re-dropping an updated export just works.
+  for (const s of loaded) {
+    const i = state.sources.findIndex(x => x.label === s.label);
+    if (i >= 0) state.sources[i] = s; else state.sources.push(s);
+  }
+  if (CONFIG.mode === "local") storageSet(state.sources.filter(s => s.origin === "file" && !s.loadError).map(({ label, text }) => ({ label, text })));
+  rebuild();
+}
+
+async function loadUrls() {
+  const fetched = await Promise.all(CONFIG.sources.map(async s => {
+    const base = { label: s.label || s.url, origin: "url", kind: s.kind };
+    try {
+      const res = await fetch(s.url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      if (/^\s*<(!doctype|html)/i.test(text)) throw new Error("got a web page instead of CSV. Use the 'Publish to web' CSV link.");
+      return { ...base, text };
+    } catch (e) {
+      return { ...base, text: "", loadError: e.message || String(e) };
+    }
+  }));
+  // Keep any files dropped on top of the URL sources
+  state.sources = [...fetched, ...state.sources.filter(s => s.origin === "file")];
+  rebuild();
+}
+
+function clearData() {
+  state.sources = state.sources.filter(s => s.origin === "url");
+  storageSet(null);
+  rebuild();
+}
+
+function rebuild() {
+  state.data = buildDataset(state.sources);
+  render();
+}
+
+/* ---------- Rendering ---------- */
+
+function render() {
+  renderLoaderBar();
+  const has = state.sources.length > 0;
+  $("#emptyState").classList.toggle("hidden", has);
+  $("#sourcesCard").classList.toggle("hidden", !has);
+  $("#issuesCard").classList.toggle("hidden", !has);
+  document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
+  document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.view === state.view)));
+  if (!has) return;
+  renderSources();
+  renderIssues();
+  const viewEl = { month: "#viewMonth", week: "#viewWeek", data: "#viewData" }[state.view];
+  $(viewEl).classList.remove("hidden");
+  if (state.view === "data") renderData();
+}
+
+function renderLoaderBar() {
+  const bits = [];
+  if (CONFIG.mode === "urls") bits.push(`<button data-action="reload">Reload sheets</button>`);
+  bits.push(`<button data-action="pick">${CONFIG.mode === "urls" ? "Add CSV files" : "Add or replace CSV files"}</button>`);
+  if (state.sources.some(s => s.origin === "file")) bits.push(`<button data-action="clear">Clear data</button>`);
+  $("#loaderBar").innerHTML = bits.join("");
+}
+
+function countChip(n, sev) {
+  return `<span class="count ${n ? sev : "zero"}" title="${n} ${sev}${n === 1 ? "" : "s"}">${n}</span>`;
+}
+
+function renderSources() {
+  const { sources, rows } = state.data;
+  $("#sourcesSummary").textContent = `${sources.length} file${sources.length === 1 ? "" : "s"}, ${rows.length} initiatives`;
+  $("#sourcesBody").innerHTML = `
+    <table class="grid">
+      <thead><tr><th>Source</th><th>Type</th><th class="num">Rows</th><th>Errors</th><th>Warnings</th><th>Notes</th></tr></thead>
+      <tbody>${sources.map(s => `
+        <tr>
+          <td><strong>${esc(s.label)}</strong> <span class="faint">${s.origin === "url" ? "· sheet URL" : "· local file"}</span></td>
+          <td>${s.loadError ? "" : `<span class="kind-tag">${s.kind === "moments" ? "Seasonal moments" : "Vertical"}${s.kindInferred ? "" : " (set in config)"}</span>`}</td>
+          <td class="num">${s.rowCount}</td>
+          <td>${countChip(s.errors, "error")}</td>
+          <td>${countChip(s.warnings, "warning")}</td>
+          <td class="muted">${s.loadError ? `<span class="load-error">${esc(s.loadError)}</span>` : s.blankRows ? `${s.blankRows} blank row${s.blankRows === 1 ? "" : "s"} skipped` : ""}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>`;
+}
+
+function renderIssues() {
+  const { issues } = state.data;
+  const nErr = issues.filter(i => i.severity === "error").length;
+  const nWarn = issues.length - nErr;
+  $("#issuesCounts").innerHTML = `${countChip(nErr, "error")} ${countChip(nWarn, "warning")}`;
+  document.querySelectorAll("#issueFilters button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.sev === state.issueFilter)));
+  const shown = issues.filter(i => state.issueFilter === "all" || i.severity === state.issueFilter);
+  if (!issues.length) { $("#issuesBody").innerHTML = `<div class="empty-note">No issues found.</div>`; return; }
+  if (!shown.length) { $("#issuesBody").innerHTML = `<div class="empty-note">No ${state.issueFilter}s.</div>`; return; }
+  $("#issuesBody").innerHTML = `
+    <table class="grid">
+      <thead><tr><th></th><th>Where</th><th>id</th><th>Problem</th></tr></thead>
+      <tbody>${shown.map(i => `
+        <tr class="${i.rowKey ? "clickable" : ""}" ${i.rowKey ? `data-row="${esc(i.rowKey)}"` : ""}>
+          <td><span class="sev ${i.severity}">${i.severity === "error" ? "Error" : "Warning"}</span></td>
+          <td style="white-space:nowrap">${esc(i.source)}${i.sheetRow ? ` <span class="muted">· row ${i.sheetRow}</span>` : ` <span class="muted">· file</span>`}</td>
+          <td class="mono">${esc(i.id)}</td>
+          <td>${esc(i.message)}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>`;
+}
+
+function renderData() {
+  const { rows, byKey } = state.data;
+  $("#dataSummary").textContent = `${rows.length} rows from ${state.data.sources.length} files`;
+  const cell = (r, f, text = r[f]) => r[`_bad_${f}`] ? `<span class="bad-value">${esc(text || "—")}</span>` : esc(text);
+  $("#dataBody").innerHTML = `
+    <table class="grid">
+      <thead><tr><th>id</th><th>Name</th><th>Tier</th><th>Parent</th><th>Vertical</th><th>Type</th><th>Start</th><th>End</th><th>Status</th><th>Channels</th><th>Source</th><th>Issues</th></tr></thead>
+      <tbody>${rows.map(r => {
+        const err = r._issues.some(i => i.severity === "error"), warn = r._issues.length && !err;
+        const p = r._parent ? byKey.get(r._parent) : null;
+        return `<tr id="row-${esc(r._key)}" class="${err ? "has-error" : warn ? "has-warning" : ""}">
+          <td class="mono">${esc(r.id) || `<span class="bad-value">—</span>`}</td>
+          <td>${esc(r.name)}</td>
+          <td>${cell(r, "tier")}</td>
+          <td>${p ? `<span class="mono">${esc(p.id)}</span> <span class="muted">${esc(p.name)}</span>` : cell(r, "parent_id")}</td>
+          <td>${r.vertical ? `<span class="vdot" style="background:${verticalColor(r.vertical)}"></span>` : ""}${cell(r, "vertical")}</td>
+          <td>${cell(r, "campaign_type")}</td>
+          <td style="white-space:nowrap">${cell(r, "start_date")}</td>
+          <td style="white-space:nowrap">${cell(r, "end_date")}</td>
+          <td>${cell(r, "status")}</td>
+          <td class="muted">${esc(r._channels.join(", "))}</td>
+          <td class="muted" style="white-space:nowrap">${esc(r._source)} · ${r._sheetRow}</td>
+          <td>${r._issues.length ? r._issues.map(i => `<span class="sev ${i.severity}" title="${esc(i.message)}">${i.severity === "error" ? "E" : "W"}</span>`).join(" ") : ""}</td>
+        </tr>`;
+      }).join("")}
+      </tbody>
+    </table>`;
+}
+
+function focusRow(key) {
+  // Step 4 replaces this with the side panel.
+  state.view = "data";
+  render();
+  const tr = document.getElementById(`row-${key}`);
+  if (tr) { tr.scrollIntoView({ block: "center", behavior: "smooth" }); tr.classList.remove("flash"); void tr.offsetWidth; tr.classList.add("flash"); }
+}
+
+/* ---------- Events ---------- */
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-action],[data-view],[data-toggle],[data-sev],tr[data-row]");
+  if (!t) return;
+  if (t.dataset.action === "pick") $("#filePicker").click();
+  else if (t.dataset.action === "clear") clearData();
+  else if (t.dataset.action === "reload") loadUrls();
+  else if (t.dataset.view) { state.view = t.dataset.view; render(); }
+  else if (t.dataset.toggle) $(`#${t.dataset.toggle}`).classList.toggle("collapsed");
+  else if (t.dataset.sev) { state.issueFilter = t.dataset.sev; renderIssues(); }
+  else if (t.dataset.row) focusRow(t.dataset.row);
+});
+$("#filePicker").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
+
+let dragDepth = 0;
+document.addEventListener("dragenter", e => { if (e.dataTransfer?.types.includes("Files")) { dragDepth++; document.body.classList.add("dragging"); } });
+document.addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) document.body.classList.remove("dragging"); });
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => {
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging");
+  if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files);
+});
+
+/* ---------- Start ---------- */
+
+if (CONFIG.mode === "urls") {
+  render();
+  loadUrls();
+} else {
+  const saved = storageGet();
+  if (Array.isArray(saved)) state.sources = saved.map(s => ({ ...s, origin: "file" }));
+  rebuild();
+}
+</script>
+</body>
+</html>
