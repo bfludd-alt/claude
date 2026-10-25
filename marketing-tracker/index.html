@@ -274,6 +274,125 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
 .tl-note { padding: 10px 14px; font-size: 12px; color: var(--text-2); border-top: 1px solid var(--border); }
 .tl-note:empty { display: none; }
 
+/* ---------- Status chips ---------- */
+.chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 10px; border: 1px solid transparent; white-space: nowrap; }
+.chip.st-idea { border: 1px dashed #8a94a1; color: #5a6573; background: #fff; }
+.chip.st-planning { background: #e6efff; color: #1a4fb5; border-color: #c4d6fb; }
+.chip.st-live { background: #1b7a3a; color: #fff; }
+.chip.st-complete { background: #eef0f3; color: #8a94a1; }
+.chip.st-paused { background: repeating-linear-gradient(135deg, #fde7c2 0 4px, #fff 4px 8px); color: #8a4b00; border-color: #f2c47a; }
+.chip.st-none { background: var(--error-bg); color: var(--error); }
+.chip.tier { background: var(--surface-2); color: var(--text-2); border-color: var(--border); }
+
+/* ---------- Weekly view ---------- */
+.week-body { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; }
+.week-col { border-right: 1px solid var(--border); min-width: 0; }
+.week-col:last-child { border-right: 0; }
+.week-col > h3 { margin: 0; padding: 10px 14px; font-size: 13px; font-weight: 700; border-bottom: 1px solid var(--border); background: var(--surface-2); display: flex; gap: 8px; align-items: baseline; }
+.week-col > h3 .muted { font-weight: 500; }
+.week-col .wk-empty { padding: 14px; color: var(--text-3); font-style: italic; }
+.wk-tier { padding: 10px 14px 2px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); }
+.wk-vertical { padding: 6px 14px 4px; font-size: 12px; font-weight: 600; display: flex; align-items: center; }
+.wk-card {
+  --c: var(--v-unknown);
+  display: block; width: calc(100% - 28px); margin: 0 14px 8px; text-align: left;
+  border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 6px;
+  padding: 8px 10px; background: var(--surface);
+}
+.wk-card:hover { background: #f9fafb; box-shadow: var(--shadow); }
+.wk-card .t { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+.wk-card .name { font-weight: 650; font-size: 13px; }
+.wk-card .meta { color: var(--text-2); font-size: 12px; margin-top: 3px; }
+.wk-card .meta b { font-weight: 600; color: var(--text); }
+.wk-card .parent { color: var(--text-2); font-size: 12px; margin-top: 3px; }
+
+/* ---------- Filters ---------- */
+.filter-bar { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; padding: 10px 14px; }
+.filter-bar label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
+.filter-bar select, .ms > summary { border: 1px solid var(--border-strong); border-radius: 6px; padding: 4px 8px; background: var(--surface); font-size: 13px; color: var(--text); }
+.filter-bar select.active, .ms.active > summary { border-color: var(--accent); background: #eef4ff; }
+.ms { position: relative; }
+.ms > summary { list-style: none; cursor: pointer; min-width: 150px; }
+.ms > summary::-webkit-details-marker { display: none; }
+.ms > summary::after { content: "▾"; float: right; margin-left: 8px; color: var(--text-3); }
+.ms-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: 0 8px 24px rgba(16,24,40,.14); padding: 6px; min-width: 210px; }
+.ms-menu label { display: flex; padding: 5px 8px; border-radius: 5px; color: var(--text); font-size: 13px; cursor: pointer; }
+.ms-menu label:hover { background: var(--surface-2); }
+.ms-menu .ms-actions { display: flex; gap: 12px; padding: 4px 8px 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; font-size: 12px; }
+.filter-note { font-size: 12px; color: var(--text-2); }
+
+/* ---------- Side panel ---------- */
+.panel-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, .25); z-index: 40; }
+.panel {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 100vw); z-index: 41;
+  background: var(--surface); box-shadow: -8px 0 32px rgba(16,24,40,.18);
+  display: flex; flex-direction: column;
+}
+.panel-head { padding: 14px 18px 12px; border-bottom: 1px solid var(--border); border-top: 5px solid var(--c, var(--v-unknown)); }
+.panel-head .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.panel-head h2 { margin: 8px 0 4px; font-size: 19px; line-height: 1.25; }
+.panel-head .close { margin-left: auto; border: 0; font-size: 22px; line-height: 1; padding: 2px 8px; color: var(--text-2); }
+.panel-body { overflow-y: auto; padding: 4px 18px 24px; }
+.panel dl { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; margin: 12px 0; font-size: 13px; }
+.panel dt { color: var(--text-2); }
+.panel dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.panel h4 { margin: 18px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); }
+.panel .text { white-space: pre-wrap; font-size: 13px; margin: 0; }
+.panel .text.empty { color: var(--text-3); font-style: italic; }
+.panel ul.bullets { margin: 0; padding-left: 18px; font-size: 13px; }
+.panel .rel {
+  --c: var(--v-unknown);
+  display: flex; gap: 10px; align-items: center; width: 100%; text-align: left;
+  border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 6px; padding: 7px 10px; margin-bottom: 6px; background: var(--surface);
+}
+.panel .rel:hover { background: var(--surface-2); }
+.panel .rel .grow { flex: 1; min-width: 0; }
+.panel .rel .sub { font-size: 12px; color: var(--text-2); }
+.panel .issue { font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
+.ch { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); margin: 0 4px 4px 0; }
+.bar.pulse { animation: pulse 1.4s ease-out 2; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(31,111,235,.7); } 100% { box-shadow: 0 0 0 10px rgba(31,111,235,0); } }
+
+.print-header { display: none; }
+
+@media (max-width: 900px) {
+  .week-body { grid-template-columns: 1fr; }
+  .week-col { border-right: 0; border-bottom: 1px solid var(--border); }
+  main { padding: 12px 16px 32px; }
+  .app-header { padding: 10px 16px; }
+}
+
+/* ---------- Print (landscape A4/A3, size set by the Print control) ---------- */
+@media print {
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: #fff; font-size: 11px; }
+  .app-header, #emptyState, #sourcesCard, #issuesCard, #filtersCard, .panel, .panel-backdrop,
+  .period-bar input, .period-bar button, .drop-overlay, .tl-note button.link { display: none !important; }
+  main { padding: 0; max-width: none; }
+  .card { box-shadow: none; border: 0; margin: 0; }
+  .print-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin: 0 0 6px; padding-bottom: 6px; border-bottom: 2px solid var(--text); }
+  .print-header h1 { margin: 0; font-size: 18px; }
+  .print-header .sub { font-size: 10px; color: var(--text-2); text-align: right; }
+  .period-bar { display: none !important; }
+  .legend { padding: 4px 0 6px; border-bottom: 0; }
+  .tl-scroll { overflow: visible; }
+  .tl { min-width: 0 !important; width: 100%; --label-w: 150px; }
+  .tl-head { border-top: 1px solid var(--border-strong); }
+  .tl-row, .tl-lane-head, .wk-card { break-inside: avoid; }
+  .tl-lane-head { break-after: avoid; }
+  .tl-group-head .chev { visibility: hidden; }
+  .bar:hover { box-shadow: none; filter: none; }
+  .tl-note { border-top: 0; padding: 4px 0; }
+  .week-body { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .week-col { border-right: 1px solid var(--border); border-bottom: 0; }
+  .wk-card { box-shadow: none; padding: 4px 8px; margin-bottom: 4px; }
+  .wk-card .name { font-size: 11px; }
+  .wk-card .meta, .wk-card .parent { font-size: 10px; margin-top: 1px; }
+  .wk-tier { padding-top: 6px; }
+  .wk-vertical { padding: 3px 14px 2px; }
+  .week-col > h3 { padding: 6px 10px; }
+}
+
 .placeholder { padding: 40px; text-align: center; color: var(--text-2); }
 .hidden { display: none !important; }
 </style>
@@ -284,12 +403,19 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
 <header class="app-header">
   <h1>Marketing Tracker</h1>
   <div class="seg" role="group" aria-label="View">
-    <button data-view="month" aria-pressed="false">Month</button>
+    <button data-view="month" aria-pressed="true">Month</button>
     <button data-view="week" aria-pressed="false">Week</button>
-    <button data-view="data" aria-pressed="true">Data</button>
+    <button data-view="data" aria-pressed="false">Data</button>
   </div>
   <div class="spacer"></div>
   <div class="loader-bar" id="loaderBar"></div>
+  <div class="loader-bar">
+    <select id="paperSize" aria-label="Paper size for printing">
+      <option value="A4">A4 landscape</option>
+      <option value="A3">A3 landscape</option>
+    </select>
+    <button data-action="print">Print</button>
+  </div>
   <input type="file" id="filePicker" accept=".csv,text/csv" multiple hidden>
 </header>
 
@@ -305,7 +431,7 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
       <button class="card-toggle" data-toggle="sourcesCard"><span class="chev">▾</span><h2>Loaded sources</h2></button>
       <span class="muted" id="sourcesSummary"></span>
     </header>
-    <div id="sourcesBody"></div>
+    <div id="sourcesBody" style="overflow-x:auto"></div>
   </section>
 
   <section id="issuesCard" class="card hidden">
@@ -322,6 +448,12 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
     <div class="scroll" id="issuesBody"></div>
   </section>
 
+  <section id="filtersCard" class="card hidden">
+    <div class="filter-bar" id="filterBar"></div>
+  </section>
+
+  <div class="print-header" id="printHeader"></div>
+
   <section id="viewMonth" class="card view hidden">
     <header class="period-bar">
       <div class="period-nav">
@@ -337,12 +469,27 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
     <div class="tl-scroll"><div class="tl" id="timeline"></div></div>
     <div class="tl-note" id="monthNote"></div>
   </section>
-  <section id="viewWeek" class="card view hidden"><div class="placeholder">Weekly view: built in step 3.</div></section>
+  <section id="viewWeek" class="card view hidden">
+    <header class="period-bar">
+      <div class="period-nav">
+        <button data-nav="-1" aria-label="Previous week">‹</button>
+        <h2 id="weekTitle"></h2>
+        <button data-nav="1" aria-label="Next week">›</button>
+      </div>
+      <input type="date" id="weekJump" aria-label="Jump to the week containing a date">
+      <button data-action="today">This week</button>
+      <span class="muted" id="weekRange"></span>
+    </header>
+    <div class="week-body" id="weekBody"></div>
+    <div class="tl-note" id="weekNote"></div>
+  </section>
   <section id="viewData" class="card view hidden">
     <header><h2>All initiatives</h2><span class="muted" id="dataSummary"></span></header>
     <div class="scroll" style="max-height:none" id="dataBody"></div>
   </section>
 </main>
+
+<div id="panelRoot"></div>
 
 <script>
 /* CORE:BEGIN — pure data logic, no DOM. tools/check.mjs runs this block in Node. */
@@ -685,6 +832,10 @@ const state = {
   issueFilter: "all",
   cursor: todayDay(),   // day number; the month/week shown is the one containing it
   collapsed: new Set(), // "lane|vertical" keys of collapsed vertical groups
+  filters: { verticals: null, tier: "", campaign_type: "", status: "", owner: "" }, // verticals: null = all, else Set
+  verticalMenuOpen: false,
+  panelKey: null,       // row shown in the side panel
+  printWidth: null,     // px width of the printable area while printing
 };
 
 const $ = sel => document.querySelector(sel);
@@ -752,15 +903,20 @@ function render() {
   $("#emptyState").classList.toggle("hidden", has);
   $("#sourcesCard").classList.toggle("hidden", !has);
   $("#issuesCard").classList.toggle("hidden", !has);
+  $("#filtersCard").classList.toggle("hidden", !has);
   document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
   document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.view === state.view)));
   if (!has) return;
   renderSources();
   renderIssues();
+  renderFilters();
+  renderPrintHeader();
   const viewEl = { month: "#viewMonth", week: "#viewWeek", data: "#viewData" }[state.view];
   $(viewEl).classList.remove("hidden");
   if (state.view === "data") renderData();
   else if (state.view === "month") renderMonth();
+  else if (state.view === "week") renderWeek();
+  renderPanel();
 }
 
 /* ---------- Monthly roadmap ---------- */
@@ -845,14 +1001,15 @@ function renderMonth() {
   $("#monthTitle").textContent = `${MONTHS_LONG[m]} ${y}`;
   $("#monthJump").value = `${y}-${String(m + 1).padStart(2, "0")}`;
 
-  const { rows } = state.data;
+  const allRows = state.data.rows;
+  const rows = allRows.filter(passes);
   const dated = rows.filter(r => r._start !== null && r._end !== null);
   const undated = rows.filter(r => r._start === null || r._end === null);
   const inMonth = dated.filter(r => r._start <= mEnd && r._end >= mStart);
   $("#monthCount").textContent = `${inMonth.length} initiative${inMonth.length === 1 ? "" : "s"} this month`;
 
   // Legend: verticals present in the data, then status styles
-  const verticals = ALLOWED.vertical.filter(v => rows.some(r => r.vertical === v));
+  const verticals = ALLOWED.vertical.filter(v => allRows.some(r => r.vertical === v));
   $("#monthLegend").innerHTML = `
     <span class="group"><span class="group-title">Vertical</span>${verticals.map(v =>
       `<span class="item"><span class="sw" style="background:${verticalColor(v)}"></span>${esc(v)}</span>`).join("")}</span>
@@ -865,8 +1022,8 @@ function renderMonth() {
 
   // Pixel geometry, used only to decide label placement and row packing
   const tl = $("#timeline");
-  const labelW = 210;
-  const trackPx = Math.max(980, tl.parentElement.clientWidth) - labelW;
+  const labelW = state.printWidth ? 150 : 210;   // matches --label-w on screen and in print
+  const trackPx = (state.printWidth || Math.max(980, tl.parentElement.clientWidth)) - labelW;
   const pxPerDay = trackPx / n;
 
   // Header: week labels (weeks start Sunday) and day numbers
@@ -1010,8 +1167,9 @@ function renderIssues() {
 }
 
 function renderData() {
-  const { rows, byKey } = state.data;
-  $("#dataSummary").textContent = `${rows.length} rows from ${state.data.sources.length} files`;
+  const { byKey } = state.data;
+  const rows = state.data.rows.filter(passes);
+  $("#dataSummary").textContent = `${rows.length} of ${state.data.rows.length} rows from ${state.data.sources.length} files`;
   const cell = (r, f, text = r[f]) => r[`_bad_${f}`] ? `<span class="bad-value">${esc(text || "—")}</span>` : esc(text);
   $("#dataBody").innerHTML = `
     <table class="grid">
@@ -1019,12 +1177,12 @@ function renderData() {
       <tbody>${rows.map(r => {
         const err = r._issues.some(i => i.severity === "error"), warn = r._issues.length && !err;
         const p = r._parent ? byKey.get(r._parent) : null;
-        return `<tr id="row-${esc(r._key)}" class="${err ? "has-error" : warn ? "has-warning" : ""}">
+        return `<tr id="row-${esc(r._key)}" data-row="${esc(r._key)}" class="clickable ${err ? "has-error" : warn ? "has-warning" : ""}">
           <td class="mono">${esc(r.id) || `<span class="bad-value">—</span>`}</td>
           <td>${esc(r.name)}</td>
           <td>${cell(r, "tier")}</td>
           <td>${p ? `<span class="mono">${esc(p.id)}</span> <span class="muted">${esc(p.name)}</span>` : cell(r, "parent_id")}</td>
-          <td>${r.vertical ? `<span class="vdot" style="background:${verticalColor(r.vertical)}"></span>` : ""}${cell(r, "vertical")}</td>
+          <td style="white-space:nowrap">${r.vertical ? `<span class="vdot" style="background:${verticalColor(r.vertical)}"></span>` : ""}${cell(r, "vertical")}</td>
           <td>${cell(r, "campaign_type")}</td>
           <td style="white-space:nowrap">${cell(r, "start_date")}</td>
           <td style="white-space:nowrap">${cell(r, "end_date")}</td>
@@ -1038,23 +1196,327 @@ function renderData() {
     </table>`;
 }
 
-function focusRow(key) {
-  // Step 4 replaces this with the side panel.
-  state.view = "data";
-  render();
-  const tr = document.getElementById(`row-${key}`);
-  if (tr) { tr.scrollIntoView({ block: "center", behavior: "smooth" }); tr.classList.remove("flash"); void tr.offsetWidth; tr.classList.add("flash"); }
+/* ---------- Filters ---------- */
+
+const NO_OWNER = "(no owner)";
+
+// Seasonal moments ignore the vertical, campaign type and owner filters,
+// so every vertical always sees the moments it plans around.
+function passes(r) {
+  const f = state.filters;
+  if (f.tier && r.tier !== f.tier) return false;
+  if (f.status && r.status !== f.status) return false;
+  if (r.tier === MOMENT) return true;
+  if (f.verticals && !f.verticals.has(r.vertical)) return false;
+  if (f.campaign_type && r.campaign_type !== f.campaign_type) return false;
+  if (f.owner && (r.owner || NO_OWNER) !== f.owner) return false;
+  return true;
 }
+
+function filterParts() {
+  const f = state.filters, parts = [];
+  if (f.verticals) parts.push(`Vertical: ${f.verticals.size ? [...f.verticals].join(", ") : "none"}`);
+  if (f.tier) parts.push(`Tier: ${f.tier}`);
+  if (f.campaign_type) parts.push(`Type: ${f.campaign_type}`);
+  if (f.status) parts.push(`Status: ${f.status}`);
+  if (f.owner) parts.push(`Owner: ${f.owner}`);
+  return parts;
+}
+
+function uniqueSorted(values, order) {
+  const set = [...new Set(values)];
+  return set.sort((a, b) => {
+    const ia = order ? order.indexOf(a) : -1, ib = order ? order.indexOf(b) : -1;
+    return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.localeCompare(b);
+  });
+}
+
+function renderFilters() {
+  const rows = state.data.rows, f = state.filters;
+  const campaigns = rows.filter(r => r.tier !== MOMENT);
+  const vOpts = uniqueSorted(campaigns.map(r => r.vertical).filter(Boolean), ALLOWED.vertical);
+  const typeOpts = uniqueSorted(campaigns.map(r => r.campaign_type).filter(Boolean), ALLOWED.campaign_type);
+  const ownerOpts = uniqueSorted(campaigns.map(r => r.owner || NO_OWNER));
+
+  const sel = (name, label, options) => `
+    <label>${label}
+      <select data-filter="${name}" class="${f[name] ? "active" : ""}">
+        <option value="">All</option>
+        ${uniqueSorted([...options, ...(f[name] ? [f[name]] : [])], options).map(o => `<option ${f[name] === o ? "selected" : ""}>${esc(o)}</option>`).join("")}
+      </select>
+    </label>`;
+
+  const vSummary = !f.verticals ? "All" : !f.verticals.size ? "None" : f.verticals.size <= 2 ? [...f.verticals].join(", ") : `${f.verticals.size} selected`;
+  const shown = rows.filter(passes).length;
+  $("#filterBar").innerHTML = `
+    <label>Vertical
+      <details class="ms ${f.verticals ? "active" : ""}" ${state.verticalMenuOpen ? "open" : ""}>
+        <summary>${esc(vSummary)}</summary>
+        <div class="ms-menu">
+          <div class="ms-actions"><button class="link" data-action="all-verticals">All verticals</button></div>
+          ${vOpts.map(v => `<label><input type="checkbox" data-vertical="${esc(v)}" ${!f.verticals || f.verticals.has(v) ? "checked" : ""}>
+            <span class="vdot" style="background:${verticalColor(v)}"></span>${esc(v)}</label>`).join("") || `<div class="faint" style="padding:6px 8px">No campaigns loaded</div>`}
+        </div>
+      </details>
+    </label>
+    ${sel("tier", "Tier", ALLOWED.tier)}
+    ${sel("campaign_type", "Type", typeOpts)}
+    ${sel("status", "Status", ALLOWED.status)}
+    ${sel("owner", "Owner", ownerOpts)}
+    <span class="filter-note">Showing ${shown} of ${rows.length}${filterParts().length ? ` · seasonal moments stay visible across verticals · <button class="link" data-action="clear-filters">Clear filters</button>` : ""}</span>`;
+}
+
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (t.dataset.filter) {
+    state.filters[t.dataset.filter] = t.value;
+    render();
+  } else if (t.dataset.vertical !== undefined) {
+    const all = [...document.querySelectorAll("[data-vertical]")];
+    const checked = all.filter(c => c.checked).map(c => c.dataset.vertical);
+    state.filters.verticals = checked.length === all.length ? null : new Set(checked);
+    render();
+  }
+});
+document.addEventListener("toggle", e => {
+  if (e.target.classList?.contains("ms")) state.verticalMenuOpen = e.target.open;
+}, true);
+
+/* ---------- Weekly view ---------- */
+
+const TIER_ORDER = [MOMENT, BRAND, TACTICAL];
+const TIER_PLURAL = { [MOMENT]: "Seasonal Moments", [BRAND]: "Brand Campaigns", [TACTICAL]: "Tactical Campaigns" };
+
+function statusChip(status) {
+  const known = STATUS_LABELS.includes(status);
+  return `<span class="chip st-${known ? status.toLowerCase() : "none"}">${esc(status || "No status")}</span>`;
+}
+
+function weekCard(r, ws, we, kind) {
+  const p = r._parent ? state.data.byKey.get(r._parent) : null;
+  let when;
+  if (kind === "launching") {
+    when = `Launches <b>${fmtDayShort(r._start)}</b>` +
+      (r._end === r._start ? " · one day" : r._end <= we ? ` · ends ${fmtDayShort(r._end)}` : ` · runs to ${fmtDay(r._end)}`);
+  } else if (kind === "ending") {
+    when = `Ends <b>${fmtDayShort(r._end)}</b> · started ${fmtDay(r._start)}`;
+  } else {
+    when = `Since ${fmtDay(r._start)} · until <b>${fmtDay(r._end)}</b>`;
+  }
+  const facts = [
+    `<span class="vdot" style="background:${verticalColor(r.vertical)}"></span>${esc(r.vertical || "No vertical")}`,
+    r.campaign_type ? esc(r.campaign_type) : "",
+    `Owner: ${r.owner ? `<b>${esc(r.owner)}</b>` : `<span class="faint">none</span>`}`,
+  ].filter(Boolean).join(" · ");
+  let parent = "";
+  if (p) parent = `↳ Parent: ${esc(p.name || p.id)}`;
+  else if (r.parent_id) parent = `↳ Parent: <span class="bad-value">${esc(r.parent_id)}</span> (not found)`;
+  else if (r.tier !== MOMENT) parent = `↳ <span class="faint">No parent</span>`;
+  return `<button class="wk-card" data-row="${esc(r._key)}" style="--c:${verticalColor(r.vertical)}">
+    <div class="t"><span class="name">${r._issues.length ? `<span class="idot ${r._issues.some(i => i.severity === "error") ? "error" : "warning"}" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;background:${r._issues.some(i => i.severity === "error") ? "var(--error)" : "#e08a00"}"></span>` : ""}${esc(barName(r))}</span>${statusChip(r.status)}</div>
+    <div class="meta">${when}</div>
+    <div class="meta">${facts}</div>
+    <div class="meta">Channels: ${r._channels.length ? esc(r._channels.join(", ")) : `<span class="faint">none</span>`}</div>
+    ${parent ? `<div class="parent">${parent}</div>` : ""}
+  </button>`;
+}
+
+function weekSection(items, ws, we, kind) {
+  let html = "";
+  const tiers = [...TIER_ORDER, null];
+  for (const tier of tiers) {
+    const inTier = items.filter(r => tier ? r.tier === tier : !TIER_ORDER.includes(r.tier));
+    if (!inTier.length) continue;
+    html += `<div class="wk-tier">${tier ? TIER_PLURAL[tier] : "Unclassified (missing or invalid tier)"}</div>`;
+    const verticals = uniqueSorted(inTier.map(r => r.vertical || "(no vertical)"), ALLOWED.vertical);
+    for (const v of verticals) {
+      const list = inTier.filter(r => (r.vertical || "(no vertical)") === v)
+        .sort((a, b) => a._start - b._start || a._end - b._end || barName(a).localeCompare(barName(b)));
+      if (tier !== MOMENT) html += `<div class="wk-vertical"><span class="vdot" style="background:${verticalColor(v)}"></span>${esc(v)}</div>`;
+      html += list.map(r => weekCard(r, ws, we, kind)).join("");
+    }
+  }
+  return html;
+}
+
+function renderWeek() {
+  const ws = weekStart(state.cursor), we = ws + 6;
+  const endDate = dayToDate(we);
+  $("#weekTitle").textContent = `Week of ${fmtDayShort(ws)}`;
+  $("#weekRange").textContent = `${fmtDayShort(ws)} – ${fmtDayShort(we)} ${endDate.getUTCFullYear()}`;
+  $("#weekJump").value = dayToISO(state.cursor);
+
+  const rows = state.data.rows.filter(passes);
+  const dated = rows.filter(r => r._start !== null && r._end !== null);
+  // Each initiative lands in exactly one section.
+  const sections = [
+    ["launching", "Launching this week", dated.filter(r => r._start >= ws && r._start <= we), "Nothing launching this week"],
+    ["live", "Live this week", dated.filter(r => r._start < ws && r._end > we), "Nothing running through this week"],
+    ["ending", "Ending this week", dated.filter(r => r._start < ws && r._end >= ws && r._end <= we), "Nothing ending this week"],
+  ];
+  $("#weekBody").innerHTML = sections.map(([kind, title, items, empty]) => `
+    <div class="week-col">
+      <h3>${title} <span class="muted">${items.length}</span></h3>
+      ${items.length ? weekSection(items, ws, we, kind) : `<div class="wk-empty">${empty}</div>`}
+    </div>`).join("");
+  renderUndatedNote("#weekNote", rows);
+}
+
+function renderUndatedNote(sel, rows) {
+  const undated = rows.filter(r => r._start === null || r._end === null);
+  $(sel).innerHTML = undated.length
+    ? `${undated.length} initiative${undated.length === 1 ? " isn't" : "s aren't"} shown because of missing or invalid dates:
+       ${undated.map(r => `<button class="link" data-row="${esc(r._key)}">${esc(r.id || barName(r))}</button>`).join(", ")}. See Data issues.`
+    : "";
+}
+
+/* ---------- Side panel ---------- */
+
+function openPanel(key) { state.panelKey = key; renderPanel(); }
+function closePanel() { state.panelKey = null; renderPanel(); }
+
+function relCard(r) {
+  const dates = r._start !== null && r._end !== null ? `${fmtDay(r._start)} – ${fmtDay(r._end)}` : "invalid dates";
+  return `<button class="rel" data-row="${esc(r._key)}" style="--c:${verticalColor(r.vertical)}">
+    <span class="grow"><strong>${esc(barName(r))}</strong>
+      <div class="sub">${[r.tier, r.vertical, dates].filter(Boolean).map(esc).join(" · ")}</div>
+      <div class="sub faint">${esc(r._source)} · row ${r._sheetRow}</div></span>
+    ${statusChip(r.status)}</button>`;
+}
+
+function renderPanel() {
+  const root = $("#panelRoot");
+  const r = state.panelKey && state.data ? state.data.byKey.get(state.panelKey) : null;
+  if (!r) { root.innerHTML = ""; return; }
+  const { byKey } = state.data;
+  const p = r._parent ? byKey.get(r._parent) : null;
+  const children = r._children.map(k => byKey.get(k)).sort((a, b) => (a._start ?? 1e9) - (b._start ?? 1e9) || barName(a).localeCompare(barName(b)));
+  const bad = f => r[`_bad_${f}`];
+  const val = (f, text = r[f]) => text ? (bad(f) ? `<span class="bad-value">${esc(text)}</span>` : esc(text)) : `<span class="faint">—</span>`;
+  const days = r._start !== null && r._end !== null ? r._end - r._start + 1 : null;
+  const textBlock = (label, f) => {
+    const v = r[f];
+    let body;
+    if (!v) body = `<p class="text empty">Not filled in</p>`;
+    else if (f === "top_highlights" && v.includes(";")) body = `<ul class="bullets">${v.split(";").map(s => s.trim()).filter(Boolean).map(s => `<li>${esc(s)}</li>`).join("")}</ul>`;
+    else body = `<p class="text">${esc(v)}</p>`;
+    return `<h4>${label}</h4>${body}`;
+  };
+
+  root.innerHTML = `
+    <div class="panel-backdrop" data-action="close-panel"></div>
+    <aside class="panel" role="dialog" aria-modal="true" aria-labelledby="panelTitle">
+      <div class="panel-head" style="--c:${verticalColor(r.vertical)}">
+        <div class="top">
+          <span class="chip tier">${esc(r.tier || "No tier")}</span>${statusChip(r.status)}
+          <button class="close" data-action="close-panel" aria-label="Close">×</button>
+        </div>
+        <h2 id="panelTitle">${esc(barName(r))}</h2>
+        <div class="muted"><span class="mono">${esc(r.id || "no id")}</span> · ${esc(r._source)}, row ${r._sheetRow}</div>
+      </div>
+      <div class="panel-body">
+        <dl>
+          <dt>Vertical</dt><dd>${r.vertical ? `<span class="vdot" style="background:${verticalColor(r.vertical)}"></span>` : ""}${val("vertical")}</dd>
+          <dt>Campaign type</dt><dd>${val("campaign_type")}</dd>
+          <dt>Dates</dt><dd>${r._start !== null ? fmtDayShort(r._start) + " " + dayToDate(r._start).getUTCFullYear() : val("start_date")} – ${r._end !== null ? fmtDayShort(r._end) + " " + dayToDate(r._end).getUTCFullYear() : val("end_date")}${days ? ` <span class="muted">(${days} day${days === 1 ? "" : "s"})</span>` : ""}</dd>
+          <dt>Owner</dt><dd>${val("owner")}</dd>
+          <dt>Channels</dt><dd>${r._channels.length ? r._channels.map(c => `<span class="ch">${esc(c)}</span>`).join("") : `<span class="faint">—</span>`}</dd>
+          <dt>Budget</dt><dd>${r._budget !== null ? `QAR ${r._budget.toLocaleString("en-US")}` : r.budget_qar ? `<span class="bad-value">${esc(r.budget_qar)}</span>` : `<span class="faint">—</span>`}</dd>
+          <dt>Source</dt><dd>${esc(r._source)} · row ${r._sheetRow}</dd>
+        </dl>
+        ${r._start !== null && r._end !== null ? `<button data-action="locate" data-key="${esc(r._key)}">Show on month roadmap</button>` : ""}
+
+        ${r._issues.length ? `<h4>Data issues (${r._issues.length})</h4>${r._issues.map(i => `<div class="issue"><span class="sev ${i.severity}">${i.severity === "error" ? "Error" : "Warning"}</span><span>${esc(i.message)}</span></div>`).join("")}` : ""}
+
+        <h4>Parent</h4>
+        ${p ? relCard(p) : r.parent_id ? `<p class="text"><span class="bad-value">${esc(r.parent_id)}</span> doesn't match any loaded id.</p>` : `<p class="text empty">${r.tier === MOMENT ? "Seasonal moments have no parent" : "No parent"}</p>`}
+
+        <h4>Children (${children.length})</h4>
+        ${children.length ? children.map(relCard).join("") : `<p class="text empty">No initiatives link to this one</p>`}
+
+        ${textBlock("Brief", "brief")}
+        ${textBlock("Target audience", "target_audience")}
+        ${textBlock("Goal", "goal")}
+        ${textBlock("KPIs", "kpis")}
+        ${textBlock("Key message", "key_message")}
+        ${textBlock("Top highlights", "top_highlights")}
+        ${textBlock("Notes", "notes")}
+      </div>
+    </aside>`;
+  root.querySelector(".close").focus({ preventScroll: true });
+}
+
+function locate(key) {
+  const r = state.data.byKey.get(key);
+  if (!r || r._start === null) return;
+  state.panelKey = null;
+  state.view = "month";
+  const visibleStart = r._start;
+  state.cursor = visibleStart;
+  render();
+  const bar = document.querySelector(`.bar[data-row="${CSS.escape(key)}"]`);
+  if (bar) {
+    bar.scrollIntoView({ block: "center", behavior: "smooth" });
+    bar.classList.remove("pulse"); void bar.offsetWidth; bar.classList.add("pulse");
+  }
+}
+
+/* ---------- Print ---------- */
+
+const PAPER_WIDTH_MM = { A4: 297, A3: 420 };
+const PRINT_MARGIN_MM = 10;
+
+function applyPaperSize() {
+  const size = $("#paperSize").value;
+  let el = document.getElementById("pageSize");
+  if (!el) { el = document.createElement("style"); el.id = "pageSize"; document.head.appendChild(el); }
+  el.textContent = `@page { size: ${size} landscape; margin: ${PRINT_MARGIN_MM}mm; }`;
+  try { localStorage.setItem("marketingTracker.paper", size); } catch { /* ignore */ }
+}
+
+function renderPrintHeader() {
+  let title;
+  if (state.view === "week") {
+    const ws = weekStart(state.cursor);
+    title = `Marketing plan · Week of ${fmtDayShort(ws)} ${dayToDate(ws).getUTCFullYear()}`;
+  } else if (state.view === "month") {
+    const [y, m] = cursorMonth();
+    title = `Marketing plan · ${MONTHS_LONG[m]} ${y}`;
+  } else title = "Marketing plan · All initiatives";
+  const parts = filterParts();
+  $("#printHeader").innerHTML = `
+    <h1>${esc(title)}</h1>
+    <div class="sub">${parts.length ? esc(parts.join(" · ")) + "<br>" : ""}
+      Sources: ${esc(state.data.sources.map(s => s.label).join(", "))}<br>
+      Printed ${fmtDay(todayDay())}</div>`;
+}
+
+window.addEventListener("beforeprint", () => {
+  // Re-pack bars for the paper width so labels beside bars don't collide.
+  const mm = PAPER_WIDTH_MM[$("#paperSize").value] - 2 * PRINT_MARGIN_MM;
+  state.printWidth = Math.floor(mm / 25.4 * 96);
+  if (state.view === "month" && state.data?.rows.length) renderMonth();
+});
+window.addEventListener("afterprint", () => {
+  state.printWidth = null;
+  if (state.view === "month" && state.data?.rows.length) renderMonth();
+});
 
 /* ---------- Events ---------- */
 
 document.addEventListener("click", e => {
+  if (state.verticalMenuOpen && !e.target.closest(".ms")) { state.verticalMenuOpen = false; renderFilters(); }
   const t = e.target.closest("[data-action],[data-view],[data-toggle],[data-sev],[data-row],[data-nav],[data-group]");
   if (!t) return;
   if (t.dataset.action === "pick") $("#filePicker").click();
   else if (t.dataset.action === "clear") clearData();
   else if (t.dataset.action === "reload") loadUrls();
   else if (t.dataset.action === "today") { state.cursor = todayDay(); render(); }
+  else if (t.dataset.action === "close-panel") closePanel();
+  else if (t.dataset.action === "locate") locate(t.dataset.key);
+  else if (t.dataset.action === "print") { if (state.view === "data") { state.view = "month"; render(); } window.print(); }
+  else if (t.dataset.action === "clear-filters") { state.filters = { verticals: null, tier: "", campaign_type: "", status: "", owner: "" }; render(); }
+  else if (t.dataset.action === "all-verticals") { state.filters.verticals = null; render(); }
   else if (t.dataset.nav) { step(+t.dataset.nav); }
   else if (t.dataset.group) {
     const k = t.dataset.group;
@@ -1064,7 +1526,7 @@ document.addEventListener("click", e => {
   else if (t.dataset.view) { state.view = t.dataset.view; render(); }
   else if (t.dataset.toggle) $(`#${t.dataset.toggle}`).classList.toggle("collapsed");
   else if (t.dataset.sev) { state.issueFilter = t.dataset.sev; renderIssues(); }
-  else if (t.dataset.row) focusRow(t.dataset.row);
+  else if (t.dataset.row) openPanel(t.dataset.row);
 });
 $("#filePicker").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
 
@@ -1073,6 +1535,12 @@ function step(dir) {
   else { const [y, m] = cursorMonth(); state.cursor = dayFromYMD(y, m + dir, 1); }
   render();
 }
+$("#weekJump").addEventListener("change", e => {
+  const d = parseISODate(e.target.value || "");
+  if (d !== null) { state.cursor = d; render(); }
+});
+$("#paperSize").addEventListener("change", applyPaperSize);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && state.panelKey) closePanel(); });
 $("#monthJump").addEventListener("change", e => {
   const [y, m] = (e.target.value || "").split("-").map(Number);
   if (y && m) { state.cursor = dayFromYMD(y, m - 1, 1); render(); }
@@ -1103,6 +1571,9 @@ document.addEventListener("drop", e => {
 });
 
 /* ---------- Start ---------- */
+
+try { const paper = localStorage.getItem("marketingTracker.paper"); if (paper) $("#paperSize").value = paper; } catch { /* ignore */ }
+applyPaperSize();
 
 if (CONFIG.mode === "urls") {
   render();
