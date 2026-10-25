@@ -174,6 +174,106 @@ tr.flash td { animation: flash 1.6s ease-out; }
 .vdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
 .bad-value { color: var(--error); text-decoration: underline wavy var(--error); text-underline-offset: 3px; }
 
+/* ---------- Period toolbar (month + week views) ---------- */
+.period-bar { flex-wrap: wrap; }
+.period-nav { display: inline-flex; align-items: center; gap: 4px; }
+.period-nav button { padding: 4px 10px; font-size: 16px; line-height: 1; }
+.period-nav h2 { font-size: 16px !important; min-width: 190px; text-align: center; }
+input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px; padding: 4px 8px; background: var(--surface); }
+
+/* ---------- Legend ---------- */
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-2); align-items: center; }
+.legend .group { display: inline-flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.legend .group-title { font-weight: 600; color: var(--text); margin-right: 2px; }
+.legend .item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.legend .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.legend .sw-bar { width: 26px; height: 12px; border-radius: 3px; display: inline-block; position: relative; }
+.legend .sep { width: 1px; align-self: stretch; background: var(--border); }
+
+/* ---------- Timeline ---------- */
+.tl-scroll { overflow-x: auto; }
+.tl { --label-w: 210px; --row-h: 28px; min-width: 980px; position: relative; font-size: 12px; }
+.tl-row { display: flex; min-height: var(--row-h); }
+.tl-label { flex: 0 0 var(--label-w); width: var(--label-w); padding: 0 10px 0 14px; display: flex; align-items: center; gap: 6px; border-right: 1px solid var(--border); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; background: var(--surface); position: relative; z-index: 3; }
+.tl-track { flex: 1; position: relative; min-width: 0; }
+
+.tl-head { border-bottom: 1px solid var(--border-strong); background: var(--surface); }
+.tl-head .tl-row { min-height: 0; }
+.tl-weeks .tl-track, .tl-days .tl-track { height: 22px; }
+.tl-weeks .tl-label, .tl-days .tl-label { color: var(--text-3); font-size: 11px; }
+.wk-label { position: absolute; top: 0; height: 22px; display: flex; align-items: center; padding-left: 6px; font-weight: 600; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--border-strong); }
+.wk-label.partial { color: var(--text-3); font-weight: 500; }
+.day-cell { position: absolute; top: 0; height: 22px; display: flex; align-items: center; justify-content: center; gap: 2px; color: var(--text-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.day-cell b { color: var(--text-2); font-weight: 600; }
+.day-cell.sun { border-left: 1px solid var(--border-strong); }
+.day-cell.today b { background: var(--error); color: #fff; border-radius: 9px; padding: 0 5px; }
+
+.tl-body { position: relative; }
+.tl-grid { position: absolute; top: 0; bottom: 0; left: var(--label-w); right: 0; pointer-events: none; z-index: 0; }
+.tl-grid .weekend { position: absolute; top: 0; bottom: 0; background: rgba(23, 32, 43, .025); }
+.tl-grid .wk-line { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--border); }
+.tl-grid .today-line { position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--error); z-index: 4; }
+.tl-grid .today-line::before { content: ""; position: absolute; top: -4px; left: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--error); }
+
+.tl-lane-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px 6px; background: var(--surface-2); border-top: 1px solid var(--border-strong); border-bottom: 1px solid var(--border); position: relative; z-index: 3; }
+.tl-lane-head h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--text); }
+.tl-lane-head .muted { font-size: 12px; }
+.tl-group-first { border-top: 1px solid var(--border); }
+.tl-campaigns .tl-lane-head + .tl-group-first { border-top: 0; }
+.tl-group-head { cursor: pointer; font-weight: 600; color: var(--text); }
+.tl-group-head:hover { background: var(--surface-2); }
+.tl-group-head .chev { font-size: 10px; width: 10px; }
+.tl-group-head.collapsed .chev { transform: rotate(-90deg); }
+.tl-group-head .n { color: var(--text-3); font-weight: 500; }
+.tl-empty { padding: 8px 14px; color: var(--text-3); font-style: italic; position: relative; z-index: 3; }
+
+.tl-campaigns { position: relative; }
+.tl-bands { position: absolute; top: 0; bottom: 0; left: var(--label-w); right: 0; pointer-events: none; z-index: 0; }
+.band { position: absolute; top: 0; bottom: 0; background: rgba(71, 85, 105, .045); border-left: 1px dashed rgba(71, 85, 105, .4); border-right: 1px dashed rgba(71, 85, 105, .4); transition: background .15s; }
+.band.hl { background: rgba(71, 85, 105, .16); border-color: rgba(71, 85, 105, .8); }
+
+/* Bars: colour = vertical (--c), style = status */
+.bar {
+  --c: var(--v-unknown);
+  position: absolute; top: 3px; height: calc(var(--row-h) - 6px);
+  border-radius: 5px; border: 1.5px solid var(--c);
+  padding: 0 7px; display: flex; align-items: center;
+  font-size: 12px; font-weight: 600; text-align: left;
+  z-index: 2; cursor: pointer; min-width: 6px;
+}
+.bar:hover { filter: brightness(.95); box-shadow: 0 1px 4px rgba(0,0,0,.18); z-index: 5; }
+.bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bar-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; pointer-events: none; }
+.bar.lbl-right .bar-label, .bar.lbl-left .bar-label { position: absolute; color: var(--text); overflow: visible; }
+.bar.lbl-right .bar-label { left: calc(100% + 5px); }
+.bar.lbl-left .bar-label { right: calc(100% + 5px); }
+
+.bar.st-idea     { background: var(--surface); border-style: dashed; color: color-mix(in srgb, var(--c) 75%, #000); }
+.bar.st-planning { background: color-mix(in srgb, var(--c) 18%, #fff); border-color: color-mix(in srgb, var(--c) 55%, #fff); color: color-mix(in srgb, var(--c) 60%, #000); }
+.bar.st-live     { background: var(--c); color: #fff; }
+.bar.st-complete { background: color-mix(in srgb, var(--c) 30%, #fff); border-color: color-mix(in srgb, var(--c) 30%, #fff); color: color-mix(in srgb, var(--c) 35%, #8a94a1); }
+.bar.st-paused   { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 32%, #fff) 0 4px, #fff 4px 8px); color: color-mix(in srgb, var(--c) 60%, #000); }
+.bar.st-none     { background: var(--surface); border-style: dotted; color: var(--text-2); }
+.bar.st-complete .bar-label { text-decoration: none; }
+.bar.lbl-right.st-complete .bar-label, .bar.lbl-left.st-complete .bar-label { color: var(--text-3); }
+
+/* Clipped at the month edge: square edge + arrow */
+.bar.clip-l { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding-left: 16px; }
+.bar.clip-r { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right-width: 0; padding-right: 16px; }
+.bar.clip-l::before, .bar.clip-r::after { position: absolute; top: 50%; transform: translateY(-50%); font-size: 11px; line-height: 1; opacity: .85; }
+.bar.clip-l::before { content: "◀"; left: 2px; }
+.bar.clip-r::after { content: "▶"; right: 2px; }
+.bar.lbl-right.clip-r .bar-label { left: calc(100% + 5px); }
+
+.bar .idot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; flex: none; box-shadow: 0 0 0 1.5px #fff; }
+.bar .idot.error { background: var(--error); }
+.bar .idot.warning { background: #e08a00; }
+
+.mini-bar { position: absolute; top: 50%; height: 6px; margin-top: -3px; border-radius: 3px; background: var(--c); opacity: .55; }
+
+.tl-note { padding: 10px 14px; font-size: 12px; color: var(--text-2); border-top: 1px solid var(--border); }
+.tl-note:empty { display: none; }
+
 .placeholder { padding: 40px; text-align: center; color: var(--text-2); }
 .hidden { display: none !important; }
 </style>
@@ -222,7 +322,21 @@ tr.flash td { animation: flash 1.6s ease-out; }
     <div class="scroll" id="issuesBody"></div>
   </section>
 
-  <section id="viewMonth" class="card view hidden"><div class="placeholder">Monthly roadmap: built in step 2.</div></section>
+  <section id="viewMonth" class="card view hidden">
+    <header class="period-bar">
+      <div class="period-nav">
+        <button data-nav="-1" aria-label="Previous month">‹</button>
+        <h2 id="monthTitle"></h2>
+        <button data-nav="1" aria-label="Next month">›</button>
+      </div>
+      <input type="month" id="monthJump" aria-label="Jump to month">
+      <button data-action="today">Today</button>
+      <span class="muted" id="monthCount"></span>
+    </header>
+    <div class="legend" id="monthLegend"></div>
+    <div class="tl-scroll"><div class="tl" id="timeline"></div></div>
+    <div class="tl-note" id="monthNote"></div>
+  </section>
   <section id="viewWeek" class="card view hidden"><div class="placeholder">Weekly view: built in step 3.</div></section>
   <section id="viewData" class="card view hidden">
     <header><h2>All initiatives</h2><span class="muted" id="dataSummary"></span></header>
@@ -567,8 +681,10 @@ const verticalColor = v => `var(${VERTICAL_VAR[v] || "--v-unknown"})`;
 const state = {
   sources: [],          // [{ label, text, origin, kind?, loadError? }]
   data: null,           // result of buildDataset
-  view: "data",
+  view: "month",
   issueFilter: "all",
+  cursor: todayDay(),   // day number; the month/week shown is the one containing it
+  collapsed: new Set(), // "lane|vertical" keys of collapsed vertical groups
 };
 
 const $ = sel => document.querySelector(sel);
@@ -644,6 +760,199 @@ function render() {
   const viewEl = { month: "#viewMonth", week: "#viewWeek", data: "#viewData" }[state.view];
   $(viewEl).classList.remove("hidden");
   if (state.view === "data") renderData();
+  else if (state.view === "month") renderMonth();
+}
+
+/* ---------- Monthly roadmap ---------- */
+
+const LANES = [
+  { tier: MOMENT, title: "Seasonal Moments", empty: "No seasonal moments this month" },
+  { tier: BRAND, title: "Brand Campaigns", empty: "No brand campaigns this month" },
+  { tier: TACTICAL, title: "Tactical Campaigns", empty: "No tactical campaigns this month" },
+];
+const STATUS_LABELS = ["Idea", "Planning", "Live", "Complete", "Paused"];
+
+function cursorMonth() { const d = dayToDate(state.cursor); return [d.getUTCFullYear(), d.getUTCMonth()]; }
+
+let measureCtx = null;
+function textWidth(s) {
+  if (!measureCtx) {
+    measureCtx = document.createElement("canvas").getContext("2d");
+    measureCtx.font = `600 12px ${getComputedStyle(document.body).fontFamily}`;
+  }
+  return measureCtx.measureText(s).width;
+}
+
+const barName = r => r.name || r.id || "(no name)";
+
+// Greedy row packing. Each bar claims its own span plus its label when the
+// label doesn't fit inside and has to sit beside the bar.
+function packBars(items, mStart, mEnd, pxPerDay, trackPx) {
+  const sorted = [...items].sort((a, b) => a._start - b._start || b._end - a._end || barName(a).localeCompare(barName(b)));
+  const rowEnds = [], rows = [];
+  for (const r of sorted) {
+    const s = Math.max(r._start, mStart), e = Math.min(r._end, mEnd);
+    const x0 = (s - mStart) * pxPerDay, x1 = (e - mStart + 1) * pxPerDay;
+    const clipPad = (r._start < mStart ? 16 : 0) + (r._end > mEnd ? 16 : 0);
+    const labelW = textWidth(barName(r)) + 16 + clipPad + (r._issues.length ? 12 : 0);
+    let pos = "in", ext0 = x0, ext1 = x1;
+    if (labelW > x1 - x0) {
+      const outW = labelW - clipPad;
+      if (x1 + 5 + outW <= trackPx) { pos = "right"; ext1 = x1 + 5 + outW; }
+      else if (x0 - 5 - outW >= 0) { pos = "left"; ext0 = x0 - 5 - outW; }
+    }
+    let i = rowEnds.findIndex(end => end + 6 <= ext0);
+    if (i < 0) { i = rowEnds.length; rowEnds.push(0); rows.push([]); }
+    rowEnds[i] = ext1;
+    rows[i].push({ r, s, e, pos });
+  }
+  return rows;
+}
+
+const pct = (d, mStart, n) => `${((d - mStart) / n) * 100}%`;
+
+function barTitle(r) {
+  const p = r._parent ? state.data.byKey.get(r._parent) : null;
+  return [
+    barName(r),
+    `${fmtDay(r._start)} – ${fmtDay(r._end)}`,
+    [r.vertical, r.campaign_type, r.status].filter(Boolean).join(" · "),
+    p ? `Parent: ${p.name || p.id}` : "",
+    r._issues.length ? `${r._issues.length} data issue${r._issues.length > 1 ? "s" : ""}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function barHTML(b, mStart, n) {
+  const { r } = b;
+  const cls = [
+    "bar",
+    `st-${STATUS_LABELS.includes(r.status) ? r.status.toLowerCase() : "none"}`,
+    r._start < b.s ? "clip-l" : "",
+    r._end > b.e ? "clip-r" : "",
+    b.pos !== "in" ? `lbl-${b.pos}` : "",
+  ].filter(Boolean).join(" ");
+  const sev = r._issues.some(i => i.severity === "error") ? "error" : r._issues.length ? "warning" : "";
+  const width = ((b.e - b.s + 1) / n) * 100;
+  return `<button class="${cls}" data-row="${esc(r._key)}" ${r.tier === MOMENT ? `data-moment="${esc(r._key)}"` : ""}
+    style="left:${pct(b.s, mStart, n)};width:${width}%;--c:${verticalColor(r.vertical)}" title="${esc(barTitle(r))}">
+    <span class="bar-label">${sev ? `<span class="idot ${sev}"></span>` : ""}${esc(barName(r))}</span></button>`;
+}
+
+function renderMonth() {
+  const [y, m] = cursorMonth();
+  const mStart = dayFromYMD(y, m, 1), mEnd = dayFromYMD(y, m + 1, 1) - 1, n = mEnd - mStart + 1;
+  const today = todayDay();
+  $("#monthTitle").textContent = `${MONTHS_LONG[m]} ${y}`;
+  $("#monthJump").value = `${y}-${String(m + 1).padStart(2, "0")}`;
+
+  const { rows } = state.data;
+  const dated = rows.filter(r => r._start !== null && r._end !== null);
+  const undated = rows.filter(r => r._start === null || r._end === null);
+  const inMonth = dated.filter(r => r._start <= mEnd && r._end >= mStart);
+  $("#monthCount").textContent = `${inMonth.length} initiative${inMonth.length === 1 ? "" : "s"} this month`;
+
+  // Legend: verticals present in the data, then status styles
+  const verticals = ALLOWED.vertical.filter(v => rows.some(r => r.vertical === v));
+  $("#monthLegend").innerHTML = `
+    <span class="group"><span class="group-title">Vertical</span>${verticals.map(v =>
+      `<span class="item"><span class="sw" style="background:${verticalColor(v)}"></span>${esc(v)}</span>`).join("")}</span>
+    <span class="sep"></span>
+    <span class="group"><span class="group-title">Status</span>${STATUS_LABELS.map(s =>
+      `<span class="item"><span class="sw-bar bar st-${s.toLowerCase()}" style="position:relative;top:0;height:12px;--c:var(--v-smk);padding:0"></span>${s}</span>`).join("")}</span>
+    <span class="sep"></span>
+    <span class="group"><span class="item"><span class="sw" style="background:rgba(71,85,105,.14);border:1px dashed rgba(71,85,105,.5)"></span>Seasonal moment period</span>
+    <span class="item">◀ ▶ Continues past the month</span></span>`;
+
+  // Pixel geometry, used only to decide label placement and row packing
+  const tl = $("#timeline");
+  const labelW = 210;
+  const trackPx = Math.max(980, tl.parentElement.clientWidth) - labelW;
+  const pxPerDay = trackPx / n;
+
+  // Header: week labels (weeks start Sunday) and day numbers
+  let weeks = "", days = "";
+  for (let ws = weekStart(mStart); ws <= mEnd; ws += 7) {
+    const a = Math.max(ws, mStart), b = Math.min(ws + 6, mEnd);
+    const partial = ws < mStart;
+    weeks += `<div class="wk-label ${partial ? "partial" : ""}" style="left:${pct(a, mStart, n)};width:${((b - a + 1) / n) * 100}%"
+      title="Week of ${fmtDayShort(ws)}">${(b - a + 1) * pxPerDay > 120 ? `Week of ${fmtDayShort(ws)}` : fmtDayShort(ws)}</div>`;
+  }
+  for (let d = mStart; d <= mEnd; d++) {
+    const wd = weekday(d);
+    days += `<div class="day-cell ${wd === 0 ? "sun" : ""} ${d === today ? "today" : ""}" style="left:${pct(d, mStart, n)};width:${100 / n}%">
+      ${pxPerDay >= 30 ? `<span>${"SMTWTFS"[wd]}</span>` : ""}<b>${dayToDate(d).getUTCDate()}</b></div>`;
+  }
+
+  // Background grid: Fri/Sat weekend shading, Sunday week lines, today
+  let grid = "";
+  for (let d = mStart; d <= mEnd; d++) {
+    const wd = weekday(d);
+    if (wd === 5) grid += `<div class="weekend" style="left:${pct(d, mStart, n)};width:${(Math.min(2, mEnd - d + 1) / n) * 100}%"></div>`;
+    if (wd === 0 && d > mStart) grid += `<div class="wk-line" style="left:${pct(d, mStart, n)}"></div>`;
+  }
+  if (today >= mStart && today <= mEnd) grid += `<div class="today-line" style="left:calc(${pct(today, mStart, n)} + ${100 / n / 2}%)" title="Today, ${fmtDay(today)}"></div>`;
+
+  // The first packed row carries the group label (if any); the rest leave the label column blank.
+  const barRows = (items, firstLabel = "") => packBars(items, mStart, mEnd, pxPerDay, trackPx)
+    .map((row, i) => `<div class="tl-row ${i === 0 && firstLabel ? "tl-group-first" : ""}">${i === 0 && firstLabel ? firstLabel : `<div class="tl-label"></div>`}<div class="tl-track">${row.map(b => barHTML(b, mStart, n)).join("")}</div></div>`).join("");
+
+  const laneHead = (lane, count) => `<div class="tl-lane-head"><h3>${lane.title}</h3><span class="muted">${count}</span></div>`;
+
+  // Seasonal moments lane
+  const momentLane = LANES[0];
+  const moments = inMonth.filter(r => r.tier === MOMENT);
+  let body = laneHead(momentLane, moments.length) + (moments.length ? barRows(moments) : `<div class="tl-empty">${momentLane.empty}</div>`);
+
+  // Campaign lanes, grouped by vertical, with moment bands behind them
+  const bands = moments.map(r => {
+    const s = Math.max(r._start, mStart), e = Math.min(r._end, mEnd);
+    return `<div class="band" data-band="${esc(r._key)}" style="left:${pct(s, mStart, n)};width:${((e - s + 1) / n) * 100}%"></div>`;
+  }).join("");
+  let campaigns = "";
+  const unclassified = inMonth.filter(r => !ALLOWED.tier.includes(r.tier));
+  const campaignLanes = [...LANES.slice(1)];
+  if (unclassified.length) campaignLanes.push({ tier: null, title: "Unclassified (missing or invalid tier)", empty: "" });
+  for (const lane of campaignLanes) {
+    const items = lane.tier ? inMonth.filter(r => r.tier === lane.tier) : unclassified;
+    campaigns += laneHead(lane, items.length);
+    if (!items.length) { campaigns += `<div class="tl-empty">${lane.empty}</div>`; continue; }
+    const groups = new Map();
+    for (const r of items) {
+      const v = r.vertical || "(no vertical)";
+      if (!groups.has(v)) groups.set(v, []);
+      groups.get(v).push(r);
+    }
+    const order = [...groups.keys()].sort((a, b) => {
+      const ia = ALLOWED.vertical.indexOf(a), ib = ALLOWED.vertical.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+    });
+    for (const v of order) {
+      const list = groups.get(v);
+      const key = `${lane.title}|${v}`;
+      const collapsed = state.collapsed.has(key);
+      const minis = collapsed ? list.map(r => {
+        const s = Math.max(r._start, mStart), e = Math.min(r._end, mEnd);
+        return `<div class="mini-bar" style="left:${pct(s, mStart, n)};width:${((e - s + 1) / n) * 100}%;--c:${verticalColor(r.vertical)}"></div>`;
+      }).join("") : "";
+      const label = `<div class="tl-label tl-group-head ${collapsed ? "collapsed" : ""}" data-group="${esc(key)}" role="button" aria-expanded="${!collapsed}" tabindex="0"
+        title="${collapsed ? "Expand" : "Collapse"} ${esc(v)}"><span class="chev">▾</span><span class="vdot" style="background:${verticalColor(v)};margin:0"></span>${esc(v)} <span class="n">${list.length}</span></div>`;
+      if (collapsed) campaigns += `<div class="tl-row tl-group-first">${label}<div class="tl-track">${minis}</div></div>`;
+      else campaigns += barRows(list, label);
+    }
+  }
+  body += `<div class="tl-campaigns"><div class="tl-bands">${bands}</div>${campaigns}</div>`;
+
+  tl.innerHTML = `
+    <div class="tl-head">
+      <div class="tl-row tl-weeks"><div class="tl-label">Week (Sun–Sat)</div><div class="tl-track">${weeks}</div></div>
+      <div class="tl-row tl-days"><div class="tl-label"></div><div class="tl-track">${days}</div></div>
+    </div>
+    <div class="tl-body"><div class="tl-grid">${grid}</div>${body}</div>`;
+
+  $("#monthNote").innerHTML = undated.length
+    ? `${undated.length} initiative${undated.length === 1 ? " isn't" : "s aren't"} on the timeline because of missing or invalid dates:
+       ${undated.map(r => `<button class="link" data-row="${esc(r._key)}">${esc(r.id || barName(r))}</button>`).join(", ")}. See Data issues.`
+    : "";
 }
 
 function renderLoaderBar() {
@@ -740,17 +1049,49 @@ function focusRow(key) {
 /* ---------- Events ---------- */
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-action],[data-view],[data-toggle],[data-sev],tr[data-row]");
+  const t = e.target.closest("[data-action],[data-view],[data-toggle],[data-sev],[data-row],[data-nav],[data-group]");
   if (!t) return;
   if (t.dataset.action === "pick") $("#filePicker").click();
   else if (t.dataset.action === "clear") clearData();
   else if (t.dataset.action === "reload") loadUrls();
+  else if (t.dataset.action === "today") { state.cursor = todayDay(); render(); }
+  else if (t.dataset.nav) { step(+t.dataset.nav); }
+  else if (t.dataset.group) {
+    const k = t.dataset.group;
+    state.collapsed.has(k) ? state.collapsed.delete(k) : state.collapsed.add(k);
+    render();
+  }
   else if (t.dataset.view) { state.view = t.dataset.view; render(); }
   else if (t.dataset.toggle) $(`#${t.dataset.toggle}`).classList.toggle("collapsed");
   else if (t.dataset.sev) { state.issueFilter = t.dataset.sev; renderIssues(); }
   else if (t.dataset.row) focusRow(t.dataset.row);
 });
 $("#filePicker").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
+
+function step(dir) {
+  if (state.view === "week") state.cursor += 7 * dir;
+  else { const [y, m] = cursorMonth(); state.cursor = dayFromYMD(y, m + dir, 1); }
+  render();
+}
+$("#monthJump").addEventListener("change", e => {
+  const [y, m] = (e.target.value || "").split("-").map(Number);
+  if (y && m) { state.cursor = dayFromYMD(y, m - 1, 1); render(); }
+});
+document.addEventListener("keydown", e => {
+  const g = e.target.closest?.("[data-group]");
+  if (g && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); g.click(); }
+});
+// Hovering a seasonal moment highlights its band behind the campaigns
+document.addEventListener("mouseover", e => {
+  const m = e.target.closest?.("[data-moment]");
+  document.querySelectorAll(".band.hl").forEach(b => b.classList.remove("hl"));
+  if (m) document.querySelector(`.band[data-band="${CSS.escape(m.dataset.moment)}"]`)?.classList.add("hl");
+});
+let resizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (state.view === "month" && state.data?.rows.length) renderMonth(); }, 120);
+});
 
 let dragDepth = 0;
 document.addEventListener("dragenter", e => { if (e.dataTransfer?.types.includes("Files")) { dragDepth++; document.body.classList.add("dragging"); } });
