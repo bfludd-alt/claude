@@ -16,15 +16,16 @@ from openpyxl.worksheet.datavalidation import DataValidation
 OUT_DIR = Path(__file__).resolve().parent.parent
 
 COLUMNS = [
-    "id", "name", "tier", "parent_id", "vertical", "campaign_type",
-    "start_date", "end_date", "status", "owner", "channels",
-    "brief", "target_audience", "goal", "kpis", "key_message", "top_highlights",
-    "budget_qar", "notes",
+    "id", "name", "tier", "parent_id", "vertical", "relevant_verticals", "sub_vertical",
+    "campaign_type", "priority", "date_confidence", "start_date", "end_date", "status",
+    "owner", "channels", "objective", "brief", "target_audience", "goal", "kpis",
+    "key_message", "top_highlights", "budget_qar", "notes",
 ]
 
 WIDTHS = {
     "id": 14, "name": 34, "tier": 18, "parent_id": 14, "vertical": 16,
-    "campaign_type": 16, "start_date": 12, "end_date": 12, "status": 11,
+    "relevant_verticals": 28, "sub_vertical": 16, "priority": 9, "date_confidence": 16,
+    "objective": 34, "campaign_type": 16, "start_date": 12, "end_date": 12, "status": 11,
     "owner": 16, "channels": 24, "brief": 48, "target_audience": 30,
     "goal": 28, "kpis": 28, "key_message": 34, "top_highlights": 40,
     "budget_qar": 12, "notes": 34,
@@ -41,13 +42,16 @@ CAMPAIGN_TYPES = [
     "Segmented", "Engagement", "Adoption", "Habit Builder",
 ]
 STATUSES = ["Idea", "Planning", "Live", "Complete", "Paused"]
+CAMPAIGN_PRIORITIES = ["P0", "P1", "P2", "P3"]
+MOMENT_PRIORITIES = ["T1", "T2", "T3"]   # MarCom tiers
+DATE_CONFIDENCE = ["Confirmed", "Fixed date", "Tentative", "Tentative (lunar)", "School-specific", "Planning window"]
 
 DATA_ROWS = 500  # validation and formatting applied to rows 2..DATA_ROWS+1
 
 HEADER_FILL = PatternFill("solid", fgColor="1F2937")
 HEADER_FONT = Font(bold=True, color="FFFFFF")
 LOCKED_FILL = PatternFill("solid", fgColor="F3F4F6")
-WRAP_COLS = {"brief", "target_audience", "goal", "kpis", "key_message", "top_highlights", "notes"}
+WRAP_COLS = {"objective", "brief", "target_audience", "goal", "kpis", "key_message", "top_highlights", "notes"}
 
 
 def col_letter(name):
@@ -55,8 +59,9 @@ def col_letter(name):
     return get_column_letter(COLUMNS.index(name) + 1)
 
 
-def build(path, tiers, verticals, locked=None):
-    """locked: dict of column -> value to pre-fill on every data row."""
+def build(path, tiers, verticals, priorities, campaign_types, locked=None):
+    """locked: dict of column -> value to pre-fill on every data row.
+    campaign_types: allowed list, or None for free text (seasonal moments)."""
     wb = Workbook()
     ws = wb.active
     ws.title = "Initiatives"
@@ -92,9 +97,12 @@ def build(path, tiers, verticals, locked=None):
     list_cols = [
         ("tier", tiers),
         ("vertical", [v for v, _ in verticals]),
-        ("campaign_type", CAMPAIGN_TYPES),
+        ("campaign_type", campaign_types),
         ("status", STATUSES),
+        ("priority", priorities),
+        ("date_confidence", DATE_CONFIDENCE),
     ]
+    list_cols = [c for c in list_cols if c[1]]
     for i, (title, values) in enumerate(list_cols, start=1):
         lists.cell(row=1, column=i, value=title)
         for j, v in enumerate(values, start=2):
@@ -110,7 +118,7 @@ def build(path, tiers, verticals, locked=None):
             cell.fill = HEADER_FILL
             cell.font = HEADER_FONT
     lists.freeze_panes = "A2"
-    for letter, w in zip("ABCDEFG", (18, 16, 16, 12, 3, 16, 8)):
+    for letter, w in zip("ABCDEFGHI", (18, 16, 16, 12, 9, 18, 3, 16, 8)[:len(list_cols)] + (3, 16, 8)):
         lists.column_dimensions[letter].width = w
 
     # Dropdowns referencing the Lists tab
@@ -132,10 +140,13 @@ def build(path, tiers, verticals, locked=None):
     print(f"wrote {path}")
 
 
-build(OUT_DIR / "tracker_template.xlsx", TIERS[1:], VERTICALS)
+build(OUT_DIR / "tracker_template.xlsx", TIERS[1:], VERTICALS, CAMPAIGN_PRIORITIES, CAMPAIGN_TYPES)
+# Moments: campaign_type holds MarCom's moment type (free text); priority is T1-T3.
 build(
     OUT_DIR / "seasonal_moments_template.xlsx",
     TIERS[:1],
     VERTICALS[-1:],
+    MOMENT_PRIORITIES,
+    None,
     locked={"tier": "Seasonal Moment", "vertical": "Cross-vertical"},
 )

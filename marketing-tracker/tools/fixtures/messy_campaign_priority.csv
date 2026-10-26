@@ -1,0 +1,3 @@
+id,name,tier,parent_id,vertical,campaign_type,priority,start_date,end_date,status
+GRC-BC-001,Campaign with a moment tier,Brand Campaign,SM-009,Grocery,Promo,T1,2026-11-11,2026-11-11,Planning
+GRC-TC-001,Campaign with a valid priority,Tactical Campaign,GRC-BC-001,Grocery,Promo,P0,2026-11-11,2026-11-11,Live

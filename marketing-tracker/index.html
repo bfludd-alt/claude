@@ -9,20 +9,53 @@
    CONFIG — edit this block to point the tracker at your data.
    ============================================================
    mode: "local" — drag CSV files onto the page or pick them with the file
-                   picker. The last loaded files are remembered in this
-                   browser until you press "Clear data".
-         "urls"  — fetch every entry in `sources` on load. Use the CSV link
-                   from Google Sheets: File > Share > Publish to web >
-                   (pick the Initiatives tab) > Comma-separated values.
-   kind (optional, per source): "moments" or "vertical". Leave it out and
-   the tracker works it out from the rows.
+                   picker. The browser remembers them until "Clear data".
+         "urls"  — fetch every source that has a `url` on load. Use the CSV
+                   link from Google Sheets: File > Share > Publish to web >
+                   (pick the tab) > Comma-separated values.
+
+   sources: one entry per sheet. Every field is optional except label.
+     label     Name shown in the tracker.
+     type      "moments", "campaigns" or "kpi". Leave out to let the
+               tracker work it out from the file's contents.
+     url       Published CSV link (used when mode is "urls").
+     file      Local mode: file name pattern that identifies this sheet's
+               export, * = anything. e.g. "*L1*Total*.csv"
+     editUrl   The sheet's normal link, ending in /edit. Enables the
+               "Edit in sheet" buttons.
+     gid       The tab's id: the number after #gid= in the address bar
+               when the tab is open.
+     vertical  KPI sources only: whose numbers these are ("Total",
+               "Grocery", ...). A Layer 1 engine file defaults to "Total".
+     statusMode KPI sources only: "scenarios" (default; uses the bear and
+               bull columns) or "threshold" (uses kpiStatus.thresholdPct).
 */
 const CONFIG = {
   mode: "local",
   sources: [
-    // { label: "Seasonal Moments", url: "https://docs.google.com/spreadsheets/d/e/.../pub?gid=0&single=true&output=csv", kind: "moments" },
-    // { label: "S Market",         url: "https://docs.google.com/spreadsheets/d/e/.../pub?gid=0&single=true&output=csv" },
+    // { label: "Seasonal Moments", type: "moments", file: "seasonal_moments*.csv",
+    //   url: "https://docs.google.com/spreadsheets/d/e/.../pub?gid=0&single=true&output=csv",
+    //   editUrl: "https://docs.google.com/spreadsheets/d/<sheet id>/edit", gid: 0 },
+    // { label: "S Market", type: "campaigns", file: "s_market*.csv", editUrl: "...", gid: 0 },
+    // { label: "KPI forecast – Total App", type: "kpi", vertical: "Total", file: "*L1*Total*.csv", editUrl: "...", gid: 0 },
   ],
+
+  // Values allowed in relevant_verticals that are audiences, not campaign verticals.
+  informationalAudiences: ["Brand", "City"],
+
+  // KPI definitions. unit: "count" or "QAR". agg: "sum" (added up over days).
+  // derived: [numerator, denominator]; recalculated from the totals, never summed or averaged.
+  kpiDefinitions: {
+    orders:  { label: "Orders", unit: "count", agg: "sum", direction: "higher_is_better" },
+    gmv_qar: { label: "GMV",    unit: "QAR",   agg: "sum", direction: "higher_is_better" },
+    aov_qar: { label: "AOV",    unit: "QAR",   derived: ["gmv_qar", "orders"], direction: "higher_is_better" },
+  },
+
+  // Status colours. "scenarios": green at/above forecast, amber below forecast
+  // but at/above bear, red below bear, blue above bull. Sources or KPIs without
+  // bear/bull (and derived KPIs such as AOV) use the threshold instead:
+  // red more than thresholdPct below forecast, blue more than thresholdPct above.
+  kpiStatus: { mode: "scenarios", thresholdPct: 5 },
 };
 </script>
 <style>
@@ -230,7 +263,9 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
 .tl-campaigns { position: relative; }
 .tl-bands { position: absolute; top: 0; bottom: 0; left: var(--label-w); right: 0; pointer-events: none; z-index: 0; }
 .band { position: absolute; top: 0; bottom: 0; background: rgba(71, 85, 105, .045); border-left: 1px dashed rgba(71, 85, 105, .4); border-right: 1px dashed rgba(71, 85, 105, .4); transition: background .15s; }
-.band.hl { background: rgba(71, 85, 105, .16); border-color: rgba(71, 85, 105, .8); }
+.band.t1 { background: rgba(71, 85, 105, .1); border-left: 1px solid rgba(71, 85, 105, .6); border-right: 1px solid rgba(71, 85, 105, .6); }
+.band.hl { background: rgba(71, 85, 105, .2); border-color: rgba(71, 85, 105, .85); }
+.bar.tentative { border-style: dashed; border-color: color-mix(in srgb, var(--c) 80%, #000); }
 
 /* Bars: colour = vertical (--c), style = status */
 .bar {
@@ -283,6 +318,12 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
 .chip.st-paused { background: repeating-linear-gradient(135deg, #fde7c2 0 4px, #fff 4px 8px); color: #8a4b00; border-color: #f2c47a; }
 .chip.st-none { background: var(--error-bg); color: var(--error); }
 .chip.tier { background: var(--surface-2); color: var(--text-2); border-color: var(--border); }
+.chip.prio { background: #fff; color: var(--text); border-color: var(--border-strong); font-variant-numeric: tabular-nums; }
+.chip.prio.bad { color: var(--error); border-color: var(--error); }
+.chip.tent { background: #fff7e6; color: #8a4b00; border: 1px dashed #d99a3a; }
+.tent { color: #8a4b00; }
+.chips { display: inline-flex; gap: 4px; flex: none; }
+.ch.info { background: #fff; border-style: dashed; color: var(--text-2); }
 
 /* ---------- Weekly view ---------- */
 .week-body { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; }
@@ -494,12 +535,15 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
 <script>
 /* CORE:BEGIN — pure data logic, no DOM. tools/check.mjs runs this block in Node. */
 
+// Columns of the campaign and seasonal moment sheets, matched by header name.
+// Any missing column is read as blank, except the required ones.
 const COLUMNS = [
-  "id", "name", "tier", "parent_id", "vertical", "campaign_type",
-  "start_date", "end_date", "status", "owner", "channels",
-  "brief", "target_audience", "goal", "kpis", "key_message", "top_highlights",
-  "budget_qar", "notes",
+  "id", "name", "tier", "parent_id", "vertical", "relevant_verticals", "sub_vertical",
+  "campaign_type", "priority", "date_confidence", "start_date", "end_date", "status",
+  "owner", "channels", "objective", "brief", "target_audience", "goal", "kpis",
+  "key_message", "top_highlights", "budget_qar", "notes",
 ];
+const REQUIRED_COLUMNS = ["id", "name", "tier", "start_date", "end_date"];
 
 const MOMENT = "Seasonal Moment";
 const BRAND = "Brand Campaign";
@@ -511,13 +555,46 @@ const ALLOWED = {
   vertical: ["S Market", "Restaurants", "Snoomart", "Grocery", "SLaundry", "Services", "New Ventures", "Cross-vertical"],
   campaign_type: ["Hero", "Promo", "Tactical", "Occasion", "Recurrent", "USP", "Segmented", "Engagement", "Adoption", "Habit Builder"],
   status: ["Idea", "Planning", "Live", "Complete", "Paused"],
+  priority_campaign: ["P0", "P1", "P2", "P3"],
+  priority_moment: ["T1", "T2", "T3"],
+  date_confidence: ["Confirmed", "Fixed date", "Tentative", "Tentative (lunar)", "School-specific", "Planning window"],
 };
+const FIRM_DATE_CONFIDENCE = ["Confirmed", "Fixed date"];
 
 const VERTICAL_CODES = {
   "S Market": "SMK", "Restaurants": "RST", "Snoomart": "SNM", "Grocery": "GRC",
   "SLaundry": "SLD", "Services": "SRV", "New Ventures": "NVT", "Cross-vertical": "CVT",
 };
 const TIER_ID_CODES = { [BRAND]: "BC", [TACTICAL]: "TC" };
+
+// Issue types: code -> label used for "Dismiss all of this type".
+const ISSUE_TYPES = {
+  load_failed: "File could not be loaded",
+  unterminated_quote: "Unclosed quote in file",
+  empty_file: "Empty file",
+  missing_columns: "Missing required columns",
+  unknown_columns: "Unknown columns",
+  extra_cells: "Row has extra cells",
+  missing_id: "Missing id",
+  missing_name: "Missing name",
+  invalid_value: "Value not in the allowed list",
+  missing_value: "Missing required value",
+  unknown_relevant_vertical: "Unknown value in relevant_verticals",
+  moment_in_vertical_file: "Seasonal moment in a vertical file",
+  campaign_in_moments_file: "Campaign in the moments file",
+  missing_date: "Missing date",
+  invalid_date: "Invalid date",
+  end_before_start: "End date before start date",
+  id_pattern: "id doesn't follow the pattern",
+  budget_nan: "Budget is not a number",
+  duplicate_id: "Duplicate id",
+  moment_has_parent: "Seasonal moment has a parent",
+  parent_not_found: "Parent not found",
+  self_parent: "Row is its own parent",
+  parent_wrong_tier: "Parent is the wrong tier",
+  tactical_no_parent: "Tactical campaign with no parent",
+  outside_parent: "Dates outside the parent's dates",
+};
 
 /* ---------- CSV ---------- */
 
@@ -550,30 +627,64 @@ function parseCSV(text) {
   return { records, unterminated: inQuotes };
 }
 
-/* ---------- Dates (whole days since 1970-01-01, UTC; no time zones) ---------- */
+/* ---------- Dates ----------
+   A date is a whole calendar day, stored as a day number (days since
+   1970-01-01). There is no time of day and no time zone, so a date can never
+   shift. "Today" is taken from the viewer's local clock. */
 
 const DAY_MS = 86400000;
 
+function dayFromYMD(y, m, d) { return Date.UTC(y, m, d) / DAY_MS; }       // m is 0-based
+function validYMD(y, m, d) {
+  const dt = new Date(Date.UTC(y, m, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m && dt.getUTCDate() === d;
+}
 function parseISODate(s) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-  if (!m) return null;
-  const y = +m[1], mo = +m[2], d = +m[3];
-  const dt = new Date(Date.UTC(y, mo - 1, d));
-  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
-  return dt.getTime() / DAY_MS;
+  if (!m || !validYMD(+m[1], +m[2] - 1, +m[3])) return null;
+  return dayFromYMD(+m[1], +m[2] - 1, +m[3]);
 }
-function dayToDate(n) { return new Date(n * DAY_MS); }
-function dayToISO(n) { return dayToDate(n).toISOString().slice(0, 10); }
-function dayFromYMD(y, m, d) { return Date.UTC(y, m, d) / DAY_MS; }       // m is 0-based
-function weekday(n) { return ((n + 4) % 7 + 7) % 7; }                     // 0 = Sunday
-function weekStart(n) { return n - weekday(n); }                          // weeks run Sun..Sat
-function todayDay() { const t = new Date(); return dayFromYMD(t.getFullYear(), t.getMonth(), t.getDate()); }
-
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-function fmtDay(n) { const d = dayToDate(n); return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}`; }
-function fmtDayShort(n) { const d = dayToDate(n); return `${DAYS_SHORT[weekday(n)]} ${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`; }
+// DD-Mmm-YY (e.g. 14-May-26), as written by the forecasting engine. Four-digit years also accepted.
+function parseDMYDate(s) {
+  const m = /^(\d{1,2})-([A-Za-z]{3})-(\d{2}|\d{4})$/.exec(s);
+  if (!m) return null;
+  const mo = MONTHS_SHORT.findIndex(x => x.toLowerCase() === m[2].toLowerCase());
+  const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+  if (mo < 0 || !validYMD(y, mo, +m[1])) return null;
+  return dayFromYMD(y, mo, +m[1]);
+}
+function dayToDate(n) { return new Date(n * DAY_MS); }                    // read with getUTC* only
+function dayToISO(n) { return dayToDate(n).toISOString().slice(0, 10); }
+function dayParts(n) { const d = dayToDate(n); return [d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()]; }
+function weekday(n) { return ((n + 4) % 7 + 7) % 7; }                     // 0 = Sunday
+function weekStart(n) { return n - weekday(n); }                          // weeks run Sun..Sat
+function monthBounds(y, m) { return [dayFromYMD(y, m, 1), dayFromYMD(y, m + 1, 1) - 1]; }
+function todayDay() { const t = new Date(); return dayFromYMD(t.getFullYear(), t.getMonth(), t.getDate()); }
+function fmtDay(n) { const [y, m, d] = dayParts(n); return `${d} ${MONTHS_SHORT[m]} ${y}`; }
+function fmtDayShort(n) { const [, m, d] = dayParts(n); return `${DAYS_SHORT[weekday(n)]} ${d} ${MONTHS_SHORT[m]}`; }
+
+/* ---------- Issues ---------- */
+
+// The fingerprint identifies an issue across reloads: its type, the row it is
+// about (id, or source + row when there is no id; date for KPI issues) and
+// the values that caused it. Change the data and the fingerprint changes.
+function makeIssue({ severity, code, src, row = null, field = null, message, values = [], day = null, sheetRow, id }) {
+  const issueId = id ?? (row ? row.id : "");
+  const where = issueId || (day !== null ? `${src.label}@${dayToISO(day)}` : `${src.label}#${sheetRow ?? row?._sheetRow ?? "file"}`);
+  return {
+    severity, code, field, message, values,
+    source: src.label,
+    sourceIdx: src._idx,
+    sheetRow: sheetRow ?? (row ? row._sheetRow : null),
+    id: issueId,
+    rowKey: row ? row._key : null,
+    day,
+    fingerprint: [code, where, day !== null ? dayToISO(day) : "", ...values.map(v => String(v ?? ""))].join("|"),
+  };
+}
 
 /* ---------- Load + merge + validate ---------- */
 
@@ -591,50 +702,42 @@ function canonical(list, value) {
 function looksLikeDate(s) { return /\d{1,4}[\/.\-]\d{1,2}[\/.\-]\d{1,4}/.test(s); }
 
 /**
- * sources: [{ label, text, origin: "file"|"url", kind?: "moments"|"vertical", loadError? }]
- * Returns { rows, byKey, byId, issues, sources }.
+ * Campaign and seasonal moment rows.
+ * sources: [{ label, text, origin, kind?: "moments"|"vertical", loadError?, _idx }]
+ * options: { informationalAudiences: ["Brand", "City"] }
+ * Returns { rows, byKey, byId, issues, summaries }.
  * Every non-blank CSV row becomes a row object, whatever its problems.
  */
-function buildDataset(sources) {
+function buildPlan(sources, options = {}) {
+  const informational = options.informationalAudiences || [];
   const rows = [];
   const issues = [];
   const summaries = [];
+  const add = (o) => { const i = makeIssue(o); issues.push(i); if (o.row) o.row._issues.push(i); return i; };
 
-  const addIssue = (severity, src, row, field, message) => {
-    const issue = {
-      severity, field, message,
-      source: src.label,
-      sheetRow: row ? row._sheetRow : null,
-      id: row ? row.id : "",
-      rowKey: row ? row._key : null,
-    };
-    issues.push(issue);
-    if (row) row._issues.push(issue);
-    return issue;
-  };
-
-  sources.forEach((src, sourceIdx) => {
+  for (const src of sources) {
     const summary = {
-      label: src.label, origin: src.origin, kind: src.kind || null, kindInferred: !src.kind,
-      rowCount: 0, blankRows: 0, errors: 0, warnings: 0, loadError: src.loadError || null,
+      label: src.label, origin: src.origin, sourceIdx: src._idx, kind: src.kind || null, kindInferred: !src.kind,
+      rowCount: 0, blankRows: 0, missingOptional: [], loadError: src.loadError || null,
     };
     summaries.push(summary);
-    if (src.loadError) { addIssue("error", src, null, null, `Could not load: ${src.loadError}`); return; }
+    if (src.loadError) { add({ severity: "error", code: "load_failed", src, message: `Could not load: ${src.loadError}`, values: [src.loadError] }); continue; }
 
     const { records, unterminated } = parseCSV(src.text || "");
-    if (unterminated) addIssue("error", src, null, null, "File ends inside a quoted cell (a \" is missing its closing quote). The last row may be incomplete.");
+    if (unterminated) add({ severity: "error", code: "unterminated_quote", src, message: "File ends inside a quoted cell (a \" is missing its closing quote). The last row may be incomplete." });
     if (!records.length || records[0].every(c => !c.trim())) {
-      addIssue("error", src, null, null, "File is empty or has no header row.");
-      return;
+      add({ severity: "error", code: "empty_file", src, message: "File is empty or has no header row." });
+      continue;
     }
 
     const header = records[0].map(normHeader);
     const colIndex = {};
     header.forEach((h, i) => { if (h && !(h in colIndex)) colIndex[h] = i; });
-    const missing = COLUMNS.filter(c => !(c in colIndex));
+    const missingRequired = REQUIRED_COLUMNS.filter(c => !(c in colIndex));
+    summary.missingOptional = COLUMNS.filter(c => !(c in colIndex) && !REQUIRED_COLUMNS.includes(c));
     const extra = header.filter(h => h && !COLUMNS.includes(h));
-    if (missing.length) addIssue("error", src, null, null, `Header is missing column${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}`);
-    if (extra.length) addIssue("warning", src, null, null, `Header has unknown column${extra.length > 1 ? "s" : ""} (ignored): ${extra.join(", ")}`);
+    if (missingRequired.length) add({ severity: "error", code: "missing_columns", src, message: `Header is missing required column${missingRequired.length > 1 ? "s" : ""}: ${missingRequired.join(", ")}`, values: missingRequired });
+    if (extra.length) add({ severity: "warning", code: "unknown_columns", src, message: `Header has unknown column${extra.length > 1 ? "s" : ""} (ignored): ${extra.join(", ")}`, values: extra });
 
     const fileRows = [];
     for (let r = 1; r < records.length; r++) {
@@ -645,22 +748,21 @@ function buildDataset(sources) {
 
       // Blank rows, including template rows where only the pre-filled tier/vertical are set.
       // Anything else (even content only in unknown columns) is kept so it gets flagged.
-      const knownIdx = new Set(["tier", "vertical"].map(c => colIndex[c]));
-      const hasContent = cells.some((c, i) => c.trim() && !knownIdx.has(i));
-      if (!hasContent) { summary.blankRows++; continue; }
+      const prefilled = new Set(["tier", "vertical"].map(c => colIndex[c]));
+      if (!cells.some((c, i) => c.trim() && !prefilled.has(i))) { summary.blankRows++; continue; }
 
       const row = {
         ...values,
-        _key: `${sourceIdx}:${r + 1}`,
+        _key: `${src._idx}:${r + 1}`,
         _source: src.label,
-        _sourceIdx: sourceIdx,
+        _sourceIdx: src._idx,
         _sheetRow: r + 1,       // header is sheet row 1
         _issues: [],
         _parent: null,
         _children: [],
       };
       if (cells.length > header.length && cells.slice(header.length).some(c => c.trim())) {
-        addIssue("warning", src, row, null, `Row has ${cells.length} cells but the header has ${header.length}; the extra cells were ignored. Check for a missing quote.`);
+        add({ severity: "warning", code: "extra_cells", src, row, message: `Row has ${cells.length} cells but the header has ${header.length}; the extra cells were ignored. Check for a missing quote.`, values: [cells.length] });
       }
       fileRows.push(row);
     }
@@ -673,64 +775,86 @@ function buildDataset(sources) {
     }
     fileRows.forEach(r => { r._fileKind = summary.kind; });
     rows.push(...fileRows);
-  });
+  }
 
   /* ---- Per-row checks ---- */
-  const srcOf = r => sources[r._sourceIdx];
+  const srcOf = r => sources.find(s => s._idx === r._sourceIdx);
+  const checkList = (r, src, field, list, required) => {
+    const raw = r[field];
+    const c = canonical(list, raw);
+    if (c === null) {
+      add({ severity: "error", code: "invalid_value", src, row: r, field, message: `${field} "${raw}" is not an allowed value. Allowed: ${list.join(", ")}.`, values: [field, raw] });
+      r[`_bad_${field}`] = true;
+    } else {
+      r[field] = c;
+      if (!c && required) add({ severity: "error", code: "missing_value", src, row: r, field, message: `Missing ${field}.`, values: [field] });
+    }
+  };
+
   for (const r of rows) {
     const src = srcOf(r);
 
-    if (!r.id) addIssue("error", src, r, "id", "Missing id.");
-    if (!r.name) addIssue("error", src, r, "name", "Missing name.");
+    if (!r.id) add({ severity: "error", code: "missing_id", src, row: r, field: "id", message: "Missing id." });
+    if (!r.name) add({ severity: "error", code: "missing_name", src, row: r, field: "name", message: "Missing name." });
 
-    // Allowed values
-    for (const field of ["tier", "vertical", "campaign_type", "status"]) {
-      const raw = r[field];
-      const c = canonical(ALLOWED[field], raw);
-      if (c === null) {
-        addIssue("error", src, r, field, `${field} "${raw}" is not an allowed value. Allowed: ${ALLOWED[field].join(", ")}.`);
-        r[`_bad_${field}`] = true;
-      } else {
-        r[field] = c;
-        if (!c) {
-          const required = field === "tier" || field === "vertical" || field === "status" || (field === "campaign_type" && r.tier && r.tier !== MOMENT);
-          if (required) addIssue("error", src, r, field, `Missing ${field}.`);
-        }
-      }
+    checkList(r, src, "tier", ALLOWED.tier, true);
+    checkList(r, src, "vertical", ALLOWED.vertical, true);
+    checkList(r, src, "status", ALLOWED.status, true);
+    const isMoment = r.tier === MOMENT;
+    // Moments hold MarCom's moment type in campaign_type (any value); campaigns use the strict list.
+    if (!isMoment) checkList(r, src, "campaign_type", ALLOWED.campaign_type, !!r.tier && !r._bad_tier);
+    // Priority: T1-T3 for moments, P0-P3 for campaigns. Optional.
+    if (r.tier) checkList(r, src, "priority", isMoment ? ALLOWED.priority_moment : ALLOWED.priority_campaign, false);
+    checkList(r, src, "date_confidence", ALLOWED.date_confidence, false);
+    r._tentative = isMoment && !!r.date_confidence && !FIRM_DATE_CONFIDENCE.includes(r.date_confidence);
+
+    // relevant_verticals: blank or "All" = every vertical. Informational values
+    // (Brand, City) are kept but don't match a vertical. Anything else is a warning.
+    r._relevantAll = false; r._relevant = new Set(); r._audiences = [];
+    const relParts = r.relevant_verticals.split(";").map(s => s.trim()).filter(Boolean);
+    if (!relParts.length) r._relevantAll = true;
+    for (const part of relParts) {
+      if (part.toLowerCase() === "all") { r._relevantAll = true; continue; }
+      const v = canonical(ALLOWED.vertical, part);
+      if (v) { r._relevant.add(v); continue; }
+      const info = canonical(informational, part);
+      if (info) { r._audiences.push(info); continue; }
+      r._audiences.push(part);
+      add({ severity: "warning", code: "unknown_relevant_vertical", src, row: r, field: "relevant_verticals", message: `relevant_verticals has "${part}", which is not a vertical or a known audience (${informational.join(", ") || "none configured"}).`, values: [part] });
     }
 
     // Tier vs file kind
-    if (r.tier === MOMENT && r._fileKind === "vertical") {
-      addIssue("error", src, r, "tier", "Seasonal moment found in a vertical file. Moments belong only in the shared Seasonal Moments sheet.");
+    if (isMoment && r._fileKind === "vertical") {
+      add({ severity: "error", code: "moment_in_vertical_file", src, row: r, field: "tier", message: "Seasonal moment found in a vertical file. Moments belong only in the shared Seasonal Moments sheet." });
     } else if ((r.tier === BRAND || r.tier === TACTICAL) && r._fileKind === "moments") {
-      addIssue("error", src, r, "tier", `${r.tier} found in the Seasonal Moments file. Campaigns belong in their vertical's sheet.`);
+      add({ severity: "error", code: "campaign_in_moments_file", src, row: r, field: "tier", message: `${r.tier} found in the Seasonal Moments file. Campaigns belong in their vertical's sheet.`, values: [r.tier] });
     }
 
     // Dates
     r._start = null; r._end = null;
     for (const [field, key] of [["start_date", "_start"], ["end_date", "_end"]]) {
       const raw = r[field];
-      if (!raw) { addIssue("error", src, r, field, `Missing ${field}.`); continue; }
+      if (!raw) { add({ severity: "error", code: "missing_date", src, row: r, field, message: `Missing ${field}.`, values: [field] }); continue; }
       const d = parseISODate(raw);
       if (d === null) {
         const hint = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? "is not a real calendar date" : looksLikeDate(raw) ? "must be in YYYY-MM-DD format" : "is not a date";
-        addIssue("error", src, r, field, `${field} "${raw}" ${hint}.`);
+        add({ severity: "error", code: "invalid_date", src, row: r, field, message: `${field} "${raw}" ${hint}.`, values: [field, raw] });
         r[`_bad_${field}`] = true;
       } else r[key] = d;
     }
     if (r._start !== null && r._end !== null && r._end < r._start) {
-      addIssue("error", src, r, "end_date", `end_date ${r.end_date} is before start_date ${r.start_date}.`);
+      add({ severity: "error", code: "end_before_start", src, row: r, field: "end_date", message: `end_date ${r.end_date} is before start_date ${r.start_date}.`, values: [r.start_date, r.end_date] });
       r._bad_end_date = true;
     }
 
     // id format (warning)
     if (r.id && r.tier) {
-      if (r.tier === MOMENT) {
-        if (!/^SM-\d{3,}$/i.test(r.id)) addIssue("warning", src, r, "id", `id "${r.id}" doesn't follow the SM-001 pattern for seasonal moments.`);
+      if (isMoment) {
+        if (!/^SM-\d{3,}$/i.test(r.id)) add({ severity: "warning", code: "id_pattern", src, row: r, field: "id", message: `id "${r.id}" doesn't follow the SM-001 pattern for seasonal moments.`, values: [r.tier, r.vertical] });
       } else if (VERTICAL_CODES[r.vertical]) {
         const code = VERTICAL_CODES[r.vertical], tc = TIER_ID_CODES[r.tier];
         if (!new RegExp(`^${code}-${tc}-\\d{3,}$`, "i").test(r.id)) {
-          addIssue("warning", src, r, "id", `id "${r.id}" doesn't follow ${code}-${tc}-001 for a ${r.tier} in ${r.vertical}.`);
+          add({ severity: "warning", code: "id_pattern", src, row: r, field: "id", message: `id "${r.id}" doesn't follow ${code}-${tc}-001 for a ${r.tier} in ${r.vertical}.`, values: [r.tier, r.vertical] });
         }
       }
     }
@@ -740,7 +864,7 @@ function buildDataset(sources) {
     if (r.budget_qar) {
       const n = Number(r.budget_qar.replace(/[,\s]/g, "").replace(/^QAR/i, ""));
       if (Number.isFinite(n)) r._budget = n;
-      else addIssue("warning", src, r, "budget_qar", `budget_qar "${r.budget_qar}" is not a number.`);
+      else add({ severity: "warning", code: "budget_nan", src, row: r, field: "budget_qar", message: `budget_qar "${r.budget_qar}" is not a number.`, values: [r.budget_qar] });
     }
 
     r._channels = r.channels ? r.channels.split(";").map(s => s.trim()).filter(Boolean) : [];
@@ -759,36 +883,36 @@ function buildDataset(sources) {
   for (const [, list] of byId) {
     if (list.length < 2) continue;
     for (const r of list) {
-      const others = list.filter(o => o !== r).map(where).join("; ");
-      addIssue("error", srcOf(r), r, "id", `Duplicate id "${r.id}": also used in ${others}.`);
+      const others = list.filter(o => o !== r).map(where);
+      add({ severity: "error", code: "duplicate_id", src: srcOf(r), row: r, field: "id", message: `Duplicate id "${r.id}": also used in ${others.join("; ")}.`, values: [r._source, ...others] });
     }
   }
 
   for (const r of rows) {
     const src = srcOf(r);
     if (!r.parent_id) {
-      if (r.tier === TACTICAL) addIssue("warning", src, r, "parent_id", "Tactical campaign has no parent. Link it to a brand campaign or seasonal moment.");
+      if (r.tier === TACTICAL) add({ severity: "warning", code: "tactical_no_parent", src, row: r, field: "parent_id", message: "Tactical campaign has no parent. Link it to a brand campaign or seasonal moment." });
       continue;
     }
     if (r.tier === MOMENT) {
-      addIssue("warning", src, r, "parent_id", `Seasonal moments don't have parents; parent_id "${r.parent_id}" is ignored.`);
+      add({ severity: "warning", code: "moment_has_parent", src, row: r, field: "parent_id", message: `Seasonal moments don't have parents; parent_id "${r.parent_id}" is ignored.`, values: [r.parent_id] });
       continue;
     }
     const candidates = byId.get(r.parent_id.toUpperCase());
     if (!candidates) {
-      addIssue("error", src, r, "parent_id", `parent_id "${r.parent_id}" doesn't match any id in the loaded files.`);
+      add({ severity: "error", code: "parent_not_found", src, row: r, field: "parent_id", message: `parent_id "${r.parent_id}" doesn't match any id in the loaded files.`, values: [r.parent_id] });
       r._bad_parent_id = true;
       continue;
     }
     const p = candidates[0];
-    if (p === r) { addIssue("error", src, r, "parent_id", "Row is its own parent."); r._bad_parent_id = true; continue; }
+    if (p === r) { add({ severity: "error", code: "self_parent", src, row: r, field: "parent_id", message: "Row is its own parent." }); r._bad_parent_id = true; continue; }
     r._parent = p._key;
     p._children.push(r._key);
 
     if (r.tier === BRAND && p.tier !== MOMENT) {
-      addIssue("warning", src, r, "parent_id", `Brand campaign's parent should be a seasonal moment, but ${p.id} is a ${p.tier || "row with no tier"}.`);
+      add({ severity: "warning", code: "parent_wrong_tier", src, row: r, field: "parent_id", message: `Brand campaign's parent should be a seasonal moment, but ${p.id} is a ${p.tier || "row with no tier"}.`, values: [p.id, p.tier] });
     } else if (r.tier === TACTICAL && p.tier !== MOMENT && p.tier !== BRAND) {
-      addIssue("warning", src, r, "parent_id", `Tactical campaign's parent should be a brand campaign or seasonal moment, but ${p.id} is a ${p.tier || "row with no tier"}.`);
+      add({ severity: "warning", code: "parent_wrong_tier", src, row: r, field: "parent_id", message: `Tactical campaign's parent should be a brand campaign or seasonal moment, but ${p.id} is a ${p.tier || "row with no tier"}.`, values: [p.id, p.tier] });
     }
 
     if (r._start !== null && r._end !== null && p._start !== null && p._end !== null &&
@@ -796,23 +920,35 @@ function buildDataset(sources) {
       const parts = [];
       if (r._start < p._start) parts.push(`starts ${r.start_date}, before its parent starts (${p.start_date})`);
       if (r._end > p._end) parts.push(`ends ${r.end_date}, after its parent ends (${p.end_date})`);
-      addIssue("warning", src, r, "start_date", `Dates fall outside parent ${p.id} "${p.name}": ${parts.join("; ")}.`);
+      add({ severity: "warning", code: "outside_parent", src, row: r, field: "start_date", message: `Dates fall outside parent ${p.id} "${p.name}": ${parts.join("; ")}.`, values: [p.id, r.start_date, r.end_date, p.start_date, p.end_date] });
     }
   }
 
-  // Counts per source
+  return { rows, byKey, byId, issues, summaries };
+}
+/**
+ * Everything loaded, merged and checked.
+ * sources: [{ label, text, origin, kind?, loadError? }] in load order.
+ * Returns { rows, byKey, byId, issues, sources } where sources are per-file summaries.
+ */
+function buildDataset(sources, options = {}) {
+  const indexed = sources.map((s, i) => ({ ...s, _idx: i }));
+  const plan = buildPlan(indexed, options);
+  const summaries = plan.summaries;
+  const issues = plan.issues;
+  for (const s of summaries) { s.errors = 0; s.warnings = 0; }
   for (const i of issues) {
-    const s = summaries.find(x => x.label === i.source);
+    const s = summaries.find(x => x.sourceIdx === i.sourceIdx);
     if (s) s[i.severity === "error" ? "errors" : "warnings"]++;
   }
-  // Sort: file-level first, then by source order and row
-  const order = new Map(sources.map((s, i) => [s.label, i]));
-  issues.sort((a, b) => (order.get(a.source) - order.get(b.source)) || ((a.sheetRow ?? 0) - (b.sheetRow ?? 0)) || (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1));
-
-  return { rows, byKey, byId, issues, sources: summaries };
+  // File-level first, then by source order and row
+  issues.sort((a, b) => (a.sourceIdx - b.sourceIdx) || ((a.sheetRow ?? 0) - (b.sheetRow ?? 0)) || (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1));
+  summaries.sort((a, b) => a.sourceIdx - b.sourceIdx);
+  return { rows: plan.rows, byKey: plan.byKey, byId: plan.byId, issues, sources: summaries };
 }
 
 /* CORE:END */
+
 </script>
 
 <script>
@@ -825,6 +961,16 @@ const VERTICAL_VAR = {
 };
 const verticalColor = v => `var(${VERTICAL_VAR[v] || "--v-unknown"})`;
 
+const MOMENT_TIERS = ["T1", "T2", "T3", ""];   // "" = no tier
+function defaultFilters() {
+  return {
+    verticals: null,                          // null = all, else Set
+    tier: "", campaign_type: "", status: "", owner: "",
+    momentTiers: new Set(["T1", "T2", ""]),   // T3 hidden by default
+    showAllMoments: false,                    // ignore the vertical filter for moments
+  };
+}
+
 const state = {
   sources: [],          // [{ label, text, origin, kind?, loadError? }]
   data: null,           // result of buildDataset
@@ -832,8 +978,9 @@ const state = {
   issueFilter: "all",
   cursor: todayDay(),   // day number; the month/week shown is the one containing it
   collapsed: new Set(), // "lane|vertical" keys of collapsed vertical groups
-  filters: { verticals: null, tier: "", campaign_type: "", status: "", owner: "" }, // verticals: null = all, else Set
-  verticalMenuOpen: false,
+  filters: defaultFilters(),
+  openMenu: null,       // which filter dropdown is open: "vertical" | "moments" | null
+  visibleKeys: new Set(), // rows passing the filters, recomputed on every render
   panelKey: null,       // row shown in the side panel
   printWidth: null,     // px width of the printable area while printing
 };
@@ -867,8 +1014,8 @@ async function addFiles(fileList) {
 }
 
 async function loadUrls() {
-  const fetched = await Promise.all(CONFIG.sources.map(async s => {
-    const base = { label: s.label || s.url, origin: "url", kind: s.kind };
+  const fetched = await Promise.all(CONFIG.sources.filter(s => s.url).map(async s => {
+    const base = { label: s.label || s.url, origin: "url", kind: s.type === "moments" ? "moments" : s.type === "campaigns" ? "vertical" : s.kind };
     try {
       const res = await fetch(s.url, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -891,7 +1038,7 @@ function clearData() {
 }
 
 function rebuild() {
-  state.data = buildDataset(state.sources);
+  state.data = buildDataset(state.sources, { informationalAudiences: CONFIG.informationalAudiences });
   render();
 }
 
@@ -907,6 +1054,7 @@ function render() {
   document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
   document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.view === state.view)));
   if (!has) return;
+  computeVisible();
   renderSources();
   renderIssues();
   renderFilters();
@@ -943,8 +1091,9 @@ const barName = r => r.name || r.id || "(no name)";
 
 // Greedy row packing. Each bar claims its own span plus its label when the
 // label doesn't fit inside and has to sit beside the bar.
-function packBars(items, mStart, mEnd, pxPerDay, trackPx) {
-  const sorted = [...items].sort((a, b) => a._start - b._start || b._end - a._end || barName(a).localeCompare(barName(b)));
+// rank (optional) packs lower-ranked items first, so they take the top rows.
+function packBars(items, mStart, mEnd, pxPerDay, trackPx, rank = () => 0) {
+  const sorted = [...items].sort((a, b) => rank(a) - rank(b) || a._start - b._start || b._end - a._end || barName(a).localeCompare(barName(b)));
   const rowEnds = [], rows = [];
   for (const r of sorted) {
     const s = Math.max(r._start, mStart), e = Math.min(r._end, mEnd);
@@ -972,7 +1121,8 @@ function barTitle(r) {
   return [
     barName(r),
     `${fmtDay(r._start)} – ${fmtDay(r._end)}`,
-    [r.vertical, r.campaign_type, r.status].filter(Boolean).join(" · "),
+    [r.vertical, r.campaign_type, r.priority, r.status].filter(Boolean).join(" · "),
+    r._tentative ? `Date tentative (${r.date_confidence})` : "",
     p ? `Parent: ${p.name || p.id}` : "",
     r._issues.length ? `${r._issues.length} data issue${r._issues.length > 1 ? "s" : ""}` : "",
   ].filter(Boolean).join("\n");
@@ -986,6 +1136,7 @@ function barHTML(b, mStart, n) {
     r._start < b.s ? "clip-l" : "",
     r._end > b.e ? "clip-r" : "",
     b.pos !== "in" ? `lbl-${b.pos}` : "",
+    r._tentative ? "tentative" : "",
   ].filter(Boolean).join(" ");
   const sev = r._issues.some(i => i.severity === "error") ? "error" : r._issues.length ? "warning" : "";
   const width = ((b.e - b.s + 1) / n) * 100;
@@ -1017,7 +1168,9 @@ function renderMonth() {
     <span class="group"><span class="group-title">Status</span>${STATUS_LABELS.map(s =>
       `<span class="item"><span class="sw-bar bar st-${s.toLowerCase()}" style="position:relative;top:0;height:12px;--c:var(--v-smk);padding:0"></span>${s}</span>`).join("")}</span>
     <span class="sep"></span>
-    <span class="group"><span class="item"><span class="sw" style="background:rgba(71,85,105,.14);border:1px dashed rgba(71,85,105,.5)"></span>Seasonal moment period</span>
+    <span class="group"><span class="item"><span class="sw" style="background:rgba(71,85,105,.2);border:1px solid rgba(71,85,105,.6)"></span>T1 moment period</span>
+    <span class="item"><span class="sw" style="background:rgba(71,85,105,.08);border:1px dashed rgba(71,85,105,.45)"></span>T2/T3 moment period</span>
+    <span class="item"><span class="sw-bar" style="background:#eef0f3;border:1.5px dashed var(--v-cvt)"></span>Date tentative</span>
     <span class="item">◀ ▶ Continues past the month</span></span>`;
 
   // Pixel geometry, used only to decide label placement and row packing
@@ -1050,7 +1203,7 @@ function renderMonth() {
   if (today >= mStart && today <= mEnd) grid += `<div class="today-line" style="left:calc(${pct(today, mStart, n)} + ${100 / n / 2}%)" title="Today, ${fmtDay(today)}"></div>`;
 
   // The first packed row carries the group label (if any); the rest leave the label column blank.
-  const barRows = (items, firstLabel = "") => packBars(items, mStart, mEnd, pxPerDay, trackPx)
+  const barRows = (items, firstLabel = "", rank) => packBars(items, mStart, mEnd, pxPerDay, trackPx, rank)
     .map((row, i) => `<div class="tl-row ${i === 0 && firstLabel ? "tl-group-first" : ""}">${i === 0 && firstLabel ? firstLabel : `<div class="tl-label"></div>`}<div class="tl-track">${row.map(b => barHTML(b, mStart, n)).join("")}</div></div>`).join("");
 
   const laneHead = (lane, count) => `<div class="tl-lane-head"><h3>${lane.title}</h3><span class="muted">${count}</span></div>`;
@@ -1058,12 +1211,13 @@ function renderMonth() {
   // Seasonal moments lane
   const momentLane = LANES[0];
   const moments = inMonth.filter(r => r.tier === MOMENT);
-  let body = laneHead(momentLane, moments.length) + (moments.length ? barRows(moments) : `<div class="tl-empty">${momentLane.empty}</div>`);
+  const tierRank = r => ({ T1: 0, T2: 1, T3: 2 }[momentTier(r)] ?? 3);
+  let body = laneHead(momentLane, moments.length) + (moments.length ? barRows(moments, "", tierRank) : `<div class="tl-empty">${momentLane.empty}</div>`);
 
   // Campaign lanes, grouped by vertical, with moment bands behind them
   const bands = moments.map(r => {
     const s = Math.max(r._start, mStart), e = Math.min(r._end, mEnd);
-    return `<div class="band" data-band="${esc(r._key)}" style="left:${pct(s, mStart, n)};width:${((e - s + 1) / n) * 100}%"></div>`;
+    return `<div class="band ${momentTier(r) === "T1" ? "t1" : ""}" data-band="${esc(r._key)}" style="left:${pct(s, mStart, n)};width:${((e - s + 1) / n) * 100}%"></div>`;
   }).join("");
   let campaigns = "";
   const unclassified = inMonth.filter(r => !ALLOWED.tier.includes(r.tier));
@@ -1137,7 +1291,10 @@ function renderSources() {
           <td class="num">${s.rowCount}</td>
           <td>${countChip(s.errors, "error")}</td>
           <td>${countChip(s.warnings, "warning")}</td>
-          <td class="muted">${s.loadError ? `<span class="load-error">${esc(s.loadError)}</span>` : s.blankRows ? `${s.blankRows} blank row${s.blankRows === 1 ? "" : "s"} skipped` : ""}</td>
+          <td class="muted">${s.loadError ? `<span class="load-error">${esc(s.loadError)}</span>` : [
+            s.blankRows ? `${s.blankRows} blank row${s.blankRows === 1 ? "" : "s"} skipped` : "",
+            s.missingOptional?.length ? `<span title="${esc(s.missingOptional.join(", "))}">${s.missingOptional.length} optional column${s.missingOptional.length === 1 ? "" : "s"} not in file (read as blank)</span>` : "",
+          ].filter(Boolean).join(" · ")}</td>
         </tr>`).join("")}
       </tbody>
     </table>`;
@@ -1173,7 +1330,7 @@ function renderData() {
   const cell = (r, f, text = r[f]) => r[`_bad_${f}`] ? `<span class="bad-value">${esc(text || "—")}</span>` : esc(text);
   $("#dataBody").innerHTML = `
     <table class="grid">
-      <thead><tr><th>id</th><th>Name</th><th>Tier</th><th>Parent</th><th>Vertical</th><th>Type</th><th>Start</th><th>End</th><th>Status</th><th>Channels</th><th>Source</th><th>Issues</th></tr></thead>
+      <thead><tr><th>id</th><th>Name</th><th>Tier</th><th>Priority</th><th>Parent</th><th>Vertical</th><th>Type</th><th>Start</th><th>End</th><th>Status</th><th>Channels</th><th>Source</th><th>Issues</th></tr></thead>
       <tbody>${rows.map(r => {
         const err = r._issues.some(i => i.severity === "error"), warn = r._issues.length && !err;
         const p = r._parent ? byKey.get(r._parent) : null;
@@ -1181,6 +1338,7 @@ function renderData() {
           <td class="mono">${esc(r.id) || `<span class="bad-value">—</span>`}</td>
           <td>${esc(r.name)}</td>
           <td>${cell(r, "tier")}</td>
+          <td>${cell(r, "priority")}</td>
           <td>${p ? `<span class="mono">${esc(p.id)}</span> <span class="muted">${esc(p.name)}</span>` : cell(r, "parent_id")}</td>
           <td style="white-space:nowrap">${r.vertical ? `<span class="vdot" style="background:${verticalColor(r.vertical)}"></span>` : ""}${cell(r, "vertical")}</td>
           <td>${cell(r, "campaign_type")}</td>
@@ -1200,18 +1358,48 @@ function renderData() {
 
 const NO_OWNER = "(no owner)";
 
-// Seasonal moments ignore the vertical, campaign type and owner filters,
-// so every vertical always sees the moments it plans around.
-function passes(r) {
+// Campaigns: every filter applies.
+// Seasonal moments ignore the type and owner filters. With a vertical filter,
+// a moment shows when its relevant_verticals include a selected vertical (or
+// All), or when it is the parent or grandparent of a visible campaign. Linked
+// moments also bypass the moment tier filter, since the campaign depends on them.
+function campaignPasses(r) {
   const f = state.filters;
   if (f.tier && r.tier !== f.tier) return false;
   if (f.status && r.status !== f.status) return false;
-  if (r.tier === MOMENT) return true;
   if (f.verticals && !f.verticals.has(r.vertical)) return false;
   if (f.campaign_type && r.campaign_type !== f.campaign_type) return false;
   if (f.owner && (r.owner || NO_OWNER) !== f.owner) return false;
   return true;
 }
+const momentTier = r => (r._bad_priority ? "" : r.priority) || "";
+function momentPasses(r, linked) {
+  const f = state.filters;
+  if (f.tier && f.tier !== MOMENT) return false;
+  if (f.status && r.status !== f.status) return false;
+  if (linked.has(r._key)) return true;
+  if (!f.momentTiers.has(momentTier(r))) return false;
+  if (f.verticals && !f.showAllMoments) return r._relevantAll || [...f.verticals].some(v => r._relevant.has(v));
+  return true;
+}
+function computeVisible() {
+  const { rows, byKey } = state.data;
+  const visible = new Set(), linked = new Set();
+  for (const r of rows) {
+    if (r.tier === MOMENT || !campaignPasses(r)) continue;
+    visible.add(r._key);
+    for (let k = r._parent, hops = 0; k && hops < 5; hops++) {
+      const p = byKey.get(k);
+      if (!p) break;
+      if (p.tier === MOMENT) linked.add(p._key);
+      k = p._parent;
+    }
+  }
+  for (const r of rows) if (r.tier === MOMENT && momentPasses(r, linked)) visible.add(r._key);
+  state.visibleKeys = visible;
+  state.linkedMoments = linked;
+}
+const passes = r => state.visibleKeys.has(r._key);
 
 function filterParts() {
   const f = state.filters, parts = [];
@@ -1220,6 +1408,9 @@ function filterParts() {
   if (f.campaign_type) parts.push(`Type: ${f.campaign_type}`);
   if (f.status) parts.push(`Status: ${f.status}`);
   if (f.owner) parts.push(`Owner: ${f.owner}`);
+  const tiersNow = MOMENT_TIERS.filter(t => f.momentTiers.has(t));
+  if (tiersNow.join() !== "T1,T2,") parts.push(`Moment tiers: ${tiersNow.map(t => t || "no tier").join(", ") || "none"}`);
+  if (f.showAllMoments) parts.push("All moments shown");
   return parts;
 }
 
@@ -1247,10 +1438,13 @@ function renderFilters() {
     </label>`;
 
   const vSummary = !f.verticals ? "All" : !f.verticals.size ? "None" : f.verticals.size <= 2 ? [...f.verticals].join(", ") : `${f.verticals.size} selected`;
+  const tiersNow = MOMENT_TIERS.filter(t => f.momentTiers.has(t));
+  const mSummary = tiersNow.length === MOMENT_TIERS.length ? "All tiers" : tiersNow.length ? tiersNow.map(t => t || "No tier").join(", ") : "None";
   const shown = rows.filter(passes).length;
+  const momentCounts = Object.fromEntries(MOMENT_TIERS.map(t => [t, rows.filter(r => r.tier === MOMENT && momentTier(r) === t).length]));
   $("#filterBar").innerHTML = `
     <label>Vertical
-      <details class="ms ${f.verticals ? "active" : ""}" ${state.verticalMenuOpen ? "open" : ""}>
+      <details class="ms ${f.verticals ? "active" : ""}" data-menu="vertical" ${state.openMenu === "vertical" ? "open" : ""}>
         <summary>${esc(vSummary)}</summary>
         <div class="ms-menu">
           <div class="ms-actions"><button class="link" data-action="all-verticals">All verticals</button></div>
@@ -1263,13 +1457,30 @@ function renderFilters() {
     ${sel("campaign_type", "Type", typeOpts)}
     ${sel("status", "Status", ALLOWED.status)}
     ${sel("owner", "Owner", ownerOpts)}
-    <span class="filter-note">Showing ${shown} of ${rows.length}${filterParts().length ? ` · seasonal moments stay visible across verticals · <button class="link" data-action="clear-filters">Clear filters</button>` : ""}</span>`;
+    <label>Moments
+      <details class="ms ${tiersNow.join() !== "T1,T2," ? "active" : ""}" data-menu="moments" ${state.openMenu === "moments" ? "open" : ""}>
+        <summary>${esc(mSummary)}</summary>
+        <div class="ms-menu">
+          ${MOMENT_TIERS.map(t => `<label><input type="checkbox" data-moment-tier="${t}" ${f.momentTiers.has(t) ? "checked" : ""}>
+            ${t ? `<span class="chip prio">${t}</span>` : "No tier"} <span class="faint">${momentCounts[t]}</span></label>`).join("")}
+        </div>
+      </details>
+    </label>
+    <label title="Show seasonal moments for every vertical, not only those relevant to the selected verticals">
+      <input type="checkbox" data-show-all-moments ${f.showAllMoments ? "checked" : ""}> Show all moments</label>
+    <span class="filter-note">Showing ${shown} of ${rows.length}${filterParts().length ? ` · <button class="link" data-action="clear-filters">Clear filters</button>` : ""}</span>`;
 }
 
 document.addEventListener("change", e => {
   const t = e.target;
   if (t.dataset.filter) {
     state.filters[t.dataset.filter] = t.value;
+    render();
+  } else if (t.dataset.momentTier !== undefined) {
+    t.checked ? state.filters.momentTiers.add(t.dataset.momentTier) : state.filters.momentTiers.delete(t.dataset.momentTier);
+    render();
+  } else if (t.dataset.showAllMoments !== undefined) {
+    state.filters.showAllMoments = t.checked;
     render();
   } else if (t.dataset.vertical !== undefined) {
     const all = [...document.querySelectorAll("[data-vertical]")];
@@ -1279,7 +1490,10 @@ document.addEventListener("change", e => {
   }
 });
 document.addEventListener("toggle", e => {
-  if (e.target.classList?.contains("ms")) state.verticalMenuOpen = e.target.open;
+  if (e.target.classList?.contains("ms")) {
+    if (e.target.open) state.openMenu = e.target.dataset.menu;
+    else if (state.openMenu === e.target.dataset.menu) state.openMenu = null;
+  }
 }, true);
 
 /* ---------- Weekly view ---------- */
@@ -1287,6 +1501,9 @@ document.addEventListener("toggle", e => {
 const TIER_ORDER = [MOMENT, BRAND, TACTICAL];
 const TIER_PLURAL = { [MOMENT]: "Seasonal Moments", [BRAND]: "Brand Campaigns", [TACTICAL]: "Tactical Campaigns" };
 
+function prioChip(r) {
+  return r.priority ? `<span class="chip prio ${r._bad_priority ? "bad" : ""}" title="Priority">${esc(r.priority)}</span>` : "";
+}
 function statusChip(status) {
   const known = STATUS_LABELS.includes(status);
   return `<span class="chip st-${known ? status.toLowerCase() : "none"}">${esc(status || "No status")}</span>`;
@@ -1313,8 +1530,8 @@ function weekCard(r, ws, we, kind) {
   else if (r.parent_id) parent = `↳ Parent: <span class="bad-value">${esc(r.parent_id)}</span> (not found)`;
   else if (r.tier !== MOMENT) parent = `↳ <span class="faint">No parent</span>`;
   return `<button class="wk-card" data-row="${esc(r._key)}" style="--c:${verticalColor(r.vertical)}">
-    <div class="t"><span class="name">${r._issues.length ? `<span class="idot ${r._issues.some(i => i.severity === "error") ? "error" : "warning"}" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;background:${r._issues.some(i => i.severity === "error") ? "var(--error)" : "#e08a00"}"></span>` : ""}${esc(barName(r))}</span>${statusChip(r.status)}</div>
-    <div class="meta">${when}</div>
+    <div class="t"><span class="name">${r._issues.length ? `<span class="idot ${r._issues.some(i => i.severity === "error") ? "error" : "warning"}" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;background:${r._issues.some(i => i.severity === "error") ? "var(--error)" : "#e08a00"}"></span>` : ""}${esc(barName(r))}</span><span class="chips">${prioChip(r)}${statusChip(r.status)}</span></div>
+    <div class="meta">${when}${r._tentative ? ` · <span class="tent">date tentative</span>` : ""}</div>
     <div class="meta">${facts}</div>
     <div class="meta">Channels: ${r._channels.length ? esc(r._channels.join(", ")) : `<span class="faint">none</span>`}</div>
     ${parent ? `<div class="parent">${parent}</div>` : ""}
@@ -1408,7 +1625,7 @@ function renderPanel() {
     <aside class="panel" role="dialog" aria-modal="true" aria-labelledby="panelTitle">
       <div class="panel-head" style="--c:${verticalColor(r.vertical)}">
         <div class="top">
-          <span class="chip tier">${esc(r.tier || "No tier")}</span>${statusChip(r.status)}
+          <span class="chip tier">${esc(r.tier || "No tier")}</span>${prioChip(r)}${statusChip(r.status)}${r._tentative ? `<span class="chip tent">Date tentative</span>` : ""}
           <button class="close" data-action="close-panel" aria-label="Close">×</button>
         </div>
         <h2 id="panelTitle">${esc(barName(r))}</h2>
@@ -1417,8 +1634,12 @@ function renderPanel() {
       <div class="panel-body">
         <dl>
           <dt>Vertical</dt><dd>${r.vertical ? `<span class="vdot" style="background:${verticalColor(r.vertical)}"></span>` : ""}${val("vertical")}</dd>
-          <dt>Campaign type</dt><dd>${val("campaign_type")}</dd>
+          ${r.sub_vertical ? `<dt>Sub-vertical</dt><dd>${esc(r.sub_vertical)}</dd>` : ""}
+          ${r.tier === MOMENT ? `<dt>Relevant to</dt><dd>${r._relevantAll && !r._relevant.size ? `<span class="ch">All verticals</span>` : ""}${[...r._relevant].map(v => `<span class="ch"><span class="vdot" style="background:${verticalColor(v)}"></span>${esc(v)}</span>`).join("")}${r._audiences.map(a => `<span class="ch info" title="Audience, not a campaign vertical">${esc(a)}</span>`).join("")}</dd>` : ""}
+          <dt>${r.tier === MOMENT ? "Moment type" : "Campaign type"}</dt><dd>${val("campaign_type")}</dd>
+          <dt>Priority</dt><dd>${val("priority")}</dd>
           <dt>Dates</dt><dd>${r._start !== null ? fmtDayShort(r._start) + " " + dayToDate(r._start).getUTCFullYear() : val("start_date")} – ${r._end !== null ? fmtDayShort(r._end) + " " + dayToDate(r._end).getUTCFullYear() : val("end_date")}${days ? ` <span class="muted">(${days} day${days === 1 ? "" : "s"})</span>` : ""}</dd>
+          ${r.date_confidence || r.tier === MOMENT ? `<dt>Date confidence</dt><dd>${val("date_confidence")}${r._tentative ? ` <span class="chip tent">Date tentative</span>` : ""}</dd>` : ""}
           <dt>Owner</dt><dd>${val("owner")}</dd>
           <dt>Channels</dt><dd>${r._channels.length ? r._channels.map(c => `<span class="ch">${esc(c)}</span>`).join("") : `<span class="faint">—</span>`}</dd>
           <dt>Budget</dt><dd>${r._budget !== null ? `QAR ${r._budget.toLocaleString("en-US")}` : r.budget_qar ? `<span class="bad-value">${esc(r.budget_qar)}</span>` : `<span class="faint">—</span>`}</dd>
@@ -1434,6 +1655,7 @@ function renderPanel() {
         <h4>Children (${children.length})</h4>
         ${children.length ? children.map(relCard).join("") : `<p class="text empty">No initiatives link to this one</p>`}
 
+        ${textBlock("Objective", "objective")}
         ${textBlock("Brief", "brief")}
         ${textBlock("Target audience", "target_audience")}
         ${textBlock("Goal", "goal")}
@@ -1505,7 +1727,7 @@ window.addEventListener("afterprint", () => {
 /* ---------- Events ---------- */
 
 document.addEventListener("click", e => {
-  if (state.verticalMenuOpen && !e.target.closest(".ms")) { state.verticalMenuOpen = false; renderFilters(); }
+  if (state.openMenu && !e.target.closest(".ms")) { state.openMenu = null; renderFilters(); }
   const t = e.target.closest("[data-action],[data-view],[data-toggle],[data-sev],[data-row],[data-nav],[data-group]");
   if (!t) return;
   if (t.dataset.action === "pick") $("#filePicker").click();
@@ -1515,7 +1737,7 @@ document.addEventListener("click", e => {
   else if (t.dataset.action === "close-panel") closePanel();
   else if (t.dataset.action === "locate") locate(t.dataset.key);
   else if (t.dataset.action === "print") { if (state.view === "data") { state.view = "month"; render(); } window.print(); }
-  else if (t.dataset.action === "clear-filters") { state.filters = { verticals: null, tier: "", campaign_type: "", status: "", owner: "" }; render(); }
+  else if (t.dataset.action === "clear-filters") { state.filters = defaultFilters(); render(); }
   else if (t.dataset.action === "all-verticals") { state.filters.verticals = null; render(); }
   else if (t.dataset.nav) { step(+t.dataset.nav); }
   else if (t.dataset.group) {

@@ -13,7 +13,11 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const html = readFileSync(join(root, "index.html"), "utf8");
 const m = /\/\* CORE:BEGIN[\s\S]*?\*\/([\s\S]*?)\/\* CORE:END \*\//.exec(html);
 if (!m) throw new Error("CORE block not found in index.html");
+const cfg = /<script>\s*(\/\*[\s\S]*?CONFIG[\s\S]*?)<\/script>/.exec(html);
+if (!cfg) throw new Error("CONFIG block not found in index.html");
+const CONFIG = new Function(`${cfg[1]}; return CONFIG;`)();
 const core = new Function(`${m[1]}; return { parseCSV, buildDataset, weekStart, dayToISO, parseISODate };`)();
+const options = { informationalAudiences: CONFIG.informationalAudiences };
 
 /* ---------- Parser self-tests ---------- */
 function parserTests() {
@@ -60,7 +64,7 @@ if (args.includes("--test")) process.exit(fails ? 1 : 0);
 
 const files = args.length ? args : readdirSync(join(root, "sample-data")).filter(f => f.endsWith(".csv")).sort().reverse().map(f => join(root, "sample-data", f));
 const sources = files.map(f => ({ label: basename(f), text: readFileSync(f, "utf8"), origin: "file" }));
-const data = core.buildDataset(sources);
+const data = core.buildDataset(sources, options);
 
 console.log("\n== Loaded sources ==");
 table(data.sources.map(s => ({ source: s.label, type: s.kind, rows: s.rowCount, blank: s.blankRows, errors: s.errors, warnings: s.warnings, note: s.loadError || "" })),
