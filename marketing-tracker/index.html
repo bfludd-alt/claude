@@ -300,9 +300,7 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
 .bar.clip-r::after { content: "▶"; right: 2px; }
 .bar.lbl-right.clip-r .bar-label { left: calc(100% + 5px); }
 
-.bar .idot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; flex: none; box-shadow: 0 0 0 1.5px #fff; }
-.bar .idot.error { background: var(--error); }
-.bar .idot.warning { background: #e08a00; }
+.bar .idot { margin-right: 5px; box-shadow: 0 0 0 1.5px #fff; }
 
 .mini-bar { position: absolute; top: 50%; height: 6px; margin-top: -3px; border-radius: 3px; background: var(--c); opacity: .55; }
 
@@ -419,7 +417,7 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
   .tl-scroll { overflow: visible; }
   .tl { min-width: 0 !important; width: 100%; --label-w: 150px; }
   .tl.has-kpi { --mtd-w: 150px; }
-  #tip, .kpi-toggles, .kpi-prompt button { display: none !important; }
+  #tip, .kpi-toggles, .kpi-prompt button, .notice, .btn { display: none !important; }
   .tl-head { border-top: 1px solid var(--border-strong); }
   .tl-row, .tl-lane-head, .wk-card { break-inside: avoid; }
   .tl-lane-head { break-after: avoid; }
@@ -513,6 +511,57 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
 .week-kpi td.neg { color: var(--k-red); } .week-kpi td.pos { color: var(--k-green); }
 .week-kpi .foot { padding: 6px 14px; font-size: 11px; color: var(--text-2); }
 
+/* ---------- Buttons, menus, notices ---------- */
+a.btn, span.btn { display: inline-flex; align-items: center; gap: 4px; text-decoration: none; color: inherit; border: 1px solid var(--border-strong); background: var(--surface); border-radius: 6px; padding: 6px 12px; white-space: nowrap; }
+a.btn:hover { background: var(--surface-2); }
+.btn-sm, a.btn.btn-sm, span.btn.btn-sm { padding: 2px 8px; font-size: 12px; border-radius: 5px; }
+button.btn { border: 1px solid var(--border-strong); }
+span.btn.disabled { color: var(--text-3); border-style: dashed; cursor: not-allowed; }
+.menu-link { display: block; padding: 6px 8px; border-radius: 5px; color: var(--text); text-decoration: none; font-size: 13px; }
+.menu-link:hover { background: var(--surface-2); }
+.notice { position: fixed; left: 50%; transform: translateX(-50%); top: 64px; z-index: 50; background: #111827; color: #f9fafb; padding: 8px 14px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.2); font-size: 13px; max-width: min(720px, calc(100vw - 32px)); }
+.notice button { margin-left: 6px; }
+.notice button.link { color: #cbd5e1; }
+.panel-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 8px; }
+
+/* ---------- Issues: actions and dismissals ---------- */
+.issue-actions { white-space: nowrap; text-align: right; }
+.issue-actions > * { margin-left: 4px; }
+tr.dismiss-form td { background: #f8fafc; }
+tr.dismiss-form input { width: min(360px, 60vw); padding: 3px 6px; border: 1px solid var(--border-strong); border-radius: 5px; margin: 0 6px; }
+.dismissed-box { border-top: 1px solid var(--border); }
+.dismissed-box > summary { padding: 8px 14px; cursor: pointer; font-size: 13px; color: var(--text-2); }
+tr.is-dismissed td, .issue.is-dismissed { opacity: .7; }
+.sev.dismissed { opacity: .45; text-decoration: line-through; }
+.bar .idot.dismissed, .idot.dismissed { background: #fff; box-shadow: 0 0 0 1.5px var(--error); }
+.idot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; flex: none; }
+.idot.error { background: var(--error); }
+.idot.warning { background: #e08a00; }
+
+/* ---------- Day panel ---------- */
+.day-headline { margin: 12px 0 4px; padding: 8px 10px; border-radius: 6px; font-weight: 600; font-size: 13px; background: var(--surface-2); }
+.day-kpi { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+.day-kpi-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--surface-2); font-size: 13px; }
+.day-kpi-head .spacer { flex: 1; }
+.day-kpi table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.day-kpi th, .day-kpi td { padding: 5px 8px; border-top: 1px solid var(--border); text-align: right; vertical-align: top; }
+.day-kpi thead th { color: var(--text-2); font-weight: 600; border-top: 0; }
+.day-kpi tbody th { text-align: left; font-weight: 600; }
+.day-kpi td.na { color: var(--text-3); font-style: italic; }
+.day-kpi .faint { font-size: 11px; }
+.chip.kst { background: var(--surface-2); color: var(--text-2); border-color: var(--border); white-space: normal; text-align: left; }
+.day-vertical { display: flex; align-items: center; font-weight: 600; font-size: 13px; margin: 10px 0 6px; }
+.day-vertical .faint { margin-left: 6px; font-weight: 500; }
+.day-cell[data-day] { cursor: pointer; }
+.day-cell[data-day]:hover b { color: var(--accent); }
+
+/* Calendar tint by orders status */
+.tl-grid .tint { position: absolute; top: 0; bottom: 0; }
+.tint.t-green { background: rgba(34, 160, 82, .09); }
+.tint.t-over { background: rgba(37, 99, 235, .10); }
+.tint.t-amber { background: rgba(224, 138, 0, .12); }
+.tint.t-red { background: rgba(198, 40, 40, .13); }
+
 .placeholder { padding: 40px; text-align: center; color: var(--text-2); }
 .hidden { display: none !important; }
 </style>
@@ -537,7 +586,9 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
     </select>
     <button data-action="print">Print</button>
   </div>
-  <input type="file" id="filePicker" accept=".csv,text/csv" multiple hidden>
+  <input type="file" id="filePicker" accept=".csv,text/csv,.json,application/json" multiple hidden>
+  <input type="file" id="dismissImport" accept=".json,application/json" hidden>
+  <div class="notice hidden" id="notice" role="status"></div>
 </header>
 
 <main>
@@ -560,6 +611,8 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
       <button class="card-toggle" data-toggle="issuesCard"><span class="chev">▾</span><h2>Data issues</h2></button>
       <span class="issue-badge" id="issuesCounts"></span>
       <div class="spacer"></div>
+      <button class="btn btn-sm" data-action="export-dismissals" title="Save the dismissed issues as a JSON file to share with the team">Export dismissals</button>
+      <button class="btn btn-sm" data-action="import-dismissals" title="Load a dismissals JSON file exported by someone else">Import dismissals</button>
       <div class="issue-filters" id="issueFilters">
         <button data-sev="all" aria-pressed="true">All</button>
         <button data-sev="error" aria-pressed="false">Errors</button>
@@ -1512,6 +1565,13 @@ const state = {
   panelKey: null,       // row shown in the side panel
   printWidth: null,     // px width of the printable area while printing
   kpiShow: new Set(Object.keys(CONFIG.kpiDefinitions)),   // KPI rows shown in the month strip
+  tint: false,          // tint month days by orders status
+  panelDay: null,       // day shown in the side panel (day number)
+  panelBackDay: null,   // day panel to return to from an initiative opened there
+  dismissals: loadDismissals(),   // fingerprint -> { note, at, ... }
+  dismissForm: null,    // { anchor, fingerprints } while the dismiss note form is open
+  dismissedOpen: false,
+  handles: new Map(),   // file name -> FileSystemFileHandle (Chrome/Edge)
 };
 
 const $ = sel => document.querySelector(sel);
@@ -1526,9 +1586,14 @@ function storageSet(v) {
   try { v ? localStorage.setItem(STORAGE_KEY, JSON.stringify(v)) : localStorage.removeItem(STORAGE_KEY); } catch { /* storage unavailable */ }
 }
 
-async function addFiles(fileList) {
+async function addFiles(fileList, handles = new Map()) {
+  for (const f of [...fileList].filter(f => /\.json$/i.test(f.name))) await importDismissals(f);
   const files = [...fileList].filter(f => /\.csv$/i.test(f.name) || f.type === "text/csv");
   if (!files.length) return;
+  for (const f of files) {
+    const h = handles.get(f.name);
+    if (h) { state.handles.set(f.name, h); handleStore.put(f.name, h); }
+  }
   const loaded = await Promise.all(files.map(f => f.text().then(
     text => ({ label: f.name, text, origin: "file" }),
     err => ({ label: f.name, text: "", origin: "file", loadError: String(err) }),
@@ -1546,18 +1611,7 @@ async function addFiles(fileList) {
 }
 
 async function loadUrls() {
-  const fetched = await Promise.all(CONFIG.sources.filter(s => s.url).map(async s => {
-    const base = { label: s.label || s.url, origin: "url", url: s.url };
-    try {
-      const res = await fetch(s.url, { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-      if (/^\s*<(!doctype|html)/i.test(text)) throw new Error("got a web page instead of CSV. Use the 'Publish to web' CSV link.");
-      return { ...base, text };
-    } catch (e) {
-      return { ...base, text: "", loadError: e.message || String(e) };
-    }
-  }));
+  const fetched = await Promise.all(CONFIG.sources.filter(s => s.url).map(fetchUrlSource));
   // Keep any files dropped on top of the URL sources
   state.sources = [...fetched, ...state.sources.filter(s => s.origin === "file")];
   rebuild();
@@ -1566,6 +1620,8 @@ async function loadUrls() {
 function clearData() {
   state.sources = state.sources.filter(s => s.origin === "url");
   storageSet(null);
+  state.handles = new Map();
+  handleStore.clear();
   rebuild();
 }
 
@@ -1701,11 +1757,10 @@ function barHTML(b, mStart, n) {
     b.pos !== "in" ? `lbl-${b.pos}` : "",
     r._tentative ? "tentative" : "",
   ].filter(Boolean).join(" ");
-  const sev = r._issues.some(i => i.severity === "error") ? "error" : r._issues.length ? "warning" : "";
   const width = ((b.e - b.s + 1) / n) * 100;
   return `<button class="${cls}" data-row="${esc(r._key)}" ${r.tier === MOMENT ? `data-moment="${esc(r._key)}"` : ""}
     style="left:${pct(b.s, mStart, n)};width:${width}%;--c:${verticalColor(r.vertical)}" title="${esc(barTitle(r))}">
-    <span class="bar-label">${sev ? `<span class="idot ${sev}"></span>` : ""}${esc(barName(r))}</span></button>`;
+    <span class="bar-label">${issueDot(r)}${esc(barName(r))}</span></button>`;
 }
 
 function renderMonth() {
@@ -1776,6 +1831,13 @@ function renderMonth() {
     if (wd === 5) grid += `<div class="weekend" style="left:${pct(d, mStart, n)};width:${(Math.min(2, mEnd - d + 1) / n) * 100}%"></div>`;
     if (wd === 0 && d > mStart) grid += `<div class="wk-line" style="left:${pct(d, mStart, n)}"></div>`;
   }
+  if (state.tint && kctx) {
+    const key = tintKpi(kctx);
+    for (let d = mStart; d <= mEnd; d++) {
+      const st = kpiStatusOf(kctx, key, kpiPoint(kctx.kpi, kctx.vertical, key, d)).status;
+      if (["green", "amber", "red", "over"].includes(st)) grid += `<div class="tint t-${st}" style="left:${pct(d, mStart, n)};width:${100 / n}%"></div>`;
+    }
+  }
   if (today >= mStart && today <= mEnd) grid += `<div class="today-line" style="left:calc(${pct(today, mStart, n)} + ${100 / n / 2}%)" title="Today, ${fmtDay(today)}"></div>`;
 
   // The first packed row carries the group label (if any); the rest leave the label column blank.
@@ -1844,8 +1906,9 @@ function renderMonth() {
 
 function renderLoaderBar() {
   const bits = [];
-  if (CONFIG.mode === "urls") bits.push(`<button data-action="reload">Reload sheets</button>`);
-  bits.push(`<button data-action="pick">${CONFIG.mode === "urls" ? "Add CSV files" : "Add or replace CSV files"}</button>`);
+  if (state.sources.length || CONFIG.mode === "urls") bits.push(`<button data-action="reload" title="Fetch every sheet again (or re-read the files) and keep the current view">Reload data</button>`);
+  bits.push(`<button data-action="pick">${CONFIG.mode === "urls" ? "Add CSV files" : "Add or replace files"}</button>`);
+  bits.push(sheetsMenuHTML());
   if (state.sources.some(s => s.origin === "file")) bits.push(`<button data-action="clear">Clear data</button>`);
   $("#loaderBar").innerHTML = bits.join("");
 }
@@ -1868,8 +1931,8 @@ function renderSources() {
           <td><strong>${esc(s.label)}</strong> <span class="faint">${s.origin === "url" ? "· sheet URL" : "· local file"}</span></td>
           <td>${s.loadError ? "" : `<span class="kind-tag">${KIND_LABELS[s.kind] || s.kind}${s.vertical ? ` · ${esc(s.vertical)}` : ""}</span>`}</td>
           <td class="num">${s.rowCount}${s.kind === "kpi_engine" ? " days" : ""}</td>
-          <td>${countChip(s.errors, "error")}</td>
-          <td>${countChip(s.warnings, "warning")}</td>
+          <td>${countChip(activeIssues(state.data.issues).filter(i => i.sourceIdx === s.sourceIdx && i.severity === "error").length, "error")}</td>
+          <td>${countChip(activeIssues(state.data.issues).filter(i => i.sourceIdx === s.sourceIdx && i.severity === "warning").length, "warning")}</td>
           <td class="muted">${s.loadError ? `<span class="load-error">${esc(s.loadError)}</span>` : [
             s.ignored ? `<span class="load-error">Ignored: another file for ${esc(s.vertical)} is loaded</span>` : "",
             s.firstDay != null ? `${s.kind === "kpi_long" ? "" : "days "}${fmtDay(s.firstDay)} – ${fmtDay(s.lastDay)}` : "",
@@ -1884,25 +1947,41 @@ function renderSources() {
 
 function renderIssues() {
   const { issues } = state.data;
-  const nErr = issues.filter(i => i.severity === "error").length;
-  const nWarn = issues.length - nErr;
-  $("#issuesCounts").innerHTML = `${countChip(nErr, "error")} ${countChip(nWarn, "warning")}`;
+  const active = activeIssues(issues);
+  const dismissedNow = issues.filter(isDismissed);
+  const live = new Set(issues.map(i => i.fingerprint));
+  const stale = [...state.dismissals.keys()].filter(fp => !live.has(fp)).length;
+  const nErr = active.filter(i => i.severity === "error").length;
+  $("#issuesCounts").innerHTML = `${countChip(nErr, "error")} ${countChip(active.length - nErr, "warning")}${dismissedNow.length ? ` <span class="faint" style="font-size:12px">+${dismissedNow.length} dismissed</span>` : ""}`;
   document.querySelectorAll("#issueFilters button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.sev === state.issueFilter)));
-  const shown = issues.filter(i => state.issueFilter === "all" || i.severity === state.issueFilter);
-  if (!issues.length) { $("#issuesBody").innerHTML = `<div class="empty-note">No issues found.</div>`; return; }
-  if (!shown.length) { $("#issuesBody").innerHTML = `<div class="empty-note">No ${state.issueFilter}s.</div>`; return; }
-  $("#issuesBody").innerHTML = `
-    <table class="grid">
-      <thead><tr><th></th><th>Where</th><th>id</th><th>Problem</th></tr></thead>
-      <tbody>${shown.map(i => `
-        <tr class="${i.rowKey ? "clickable" : ""}" ${i.rowKey ? `data-row="${esc(i.rowKey)}"` : ""}>
-          <td><span class="sev ${i.severity}">${i.severity === "error" ? "Error" : "Warning"}</span></td>
-          <td style="white-space:nowrap">${esc(i.source)}${i.sheetRow ? ` <span class="muted">· row ${i.sheetRow}</span>` : ` <span class="muted">· file</span>`}</td>
+  const shown = active.filter(i => state.issueFilter === "all" || i.severity === state.issueFilter);
+  const typeCount = new Map();
+  for (const i of active) typeCount.set(`${i.code}|${i.severity}`, (typeCount.get(`${i.code}|${i.severity}`) || 0) + 1);
+
+  let main;
+  if (!active.length) main = `<div class="empty-note">${issues.length ? "No open issues. Everything else is dismissed." : "No issues found."}</div>`;
+  else if (!shown.length) main = `<div class="empty-note">No ${state.issueFilter}s.</div>`;
+  else main = `<table class="grid">
+      <thead><tr><th></th><th>Where</th><th>id</th><th>Problem</th><th></th></tr></thead>
+      <tbody>${shown.map(i => issueRowHTML(i, typeCount.get(`${i.code}|${i.severity}`))).join("")}</tbody></table>`;
+
+  const dismissedBox = dismissedNow.length || stale ? `
+    <details class="dismissed-box" data-dismissed-box ${state.dismissedOpen ? "open" : ""}>
+      <summary>Dismissed (${dismissedNow.length})${stale ? ` <span class="faint">· ${stale} saved dismissal${stale === 1 ? "" : "s"} no longer match${stale === 1 ? "es" : ""} any issue</span>` : ""}</summary>
+      ${dismissedNow.length ? `<table class="grid"><thead><tr><th></th><th>Where</th><th>id</th><th>Problem</th><th>Note</th><th></th></tr></thead><tbody>
+        ${dismissedNow.map(i => { const d = state.dismissals.get(i.fingerprint); return `<tr class="is-dismissed">
+          <td>${i.severity === "error" ? `<span class="sev error" title="Dismissed error">⚠ Error</span>` : `<span class="sev warning">Warning</span>`}</td>
+          <td style="white-space:nowrap">${esc(i.source)}${i.sheetRow ? ` <span class="muted">· row ${i.sheetRow}</span>` : ""}</td>
           <td class="mono">${esc(i.id)}</td>
           <td>${esc(i.message)}</td>
-        </tr>`).join("")}
-      </tbody>
-    </table>`;
+          <td>${d.note ? esc(d.note) : `<span class="faint">—</span>`}<div class="faint">${d.at ? new Date(d.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""}</div></td>
+          <td class="issue-actions">${editButton(i.sourceIdx, i.sheetRow, "Edit in sheet", true)}<button class="btn btn-sm" data-action="restore" data-fp="${esc(i.fingerprint)}">Restore</button></td></tr>`; }).join("")}
+        </tbody></table>` : ""}
+      ${stale ? `<div class="empty-note">Stale dismissals are kept in case the data changes back. <button class="link" data-action="clean-dismissals">Remove the ${stale} that no longer match</button></div>` : ""}
+    </details>` : "";
+  $("#issuesBody").innerHTML = main + dismissedBox;
+  const input = $("#dismissNote");
+  if (input) input.focus();
 }
 
 function renderData() {
@@ -1914,7 +1993,7 @@ function renderData() {
     <table class="grid">
       <thead><tr><th>id</th><th>Name</th><th>Tier</th><th>Priority</th><th>Parent</th><th>Vertical</th><th>Type</th><th>Start</th><th>End</th><th>Status</th><th>Channels</th><th>Source</th><th>Issues</th></tr></thead>
       <tbody>${rows.map(r => {
-        const err = r._issues.some(i => i.severity === "error"), warn = r._issues.length && !err;
+        const st = rowIssueState(r), err = st === "error", warn = st === "warning";
         const p = r._parent ? byKey.get(r._parent) : null;
         return `<tr id="row-${esc(r._key)}" data-row="${esc(r._key)}" class="clickable ${err ? "has-error" : warn ? "has-warning" : ""}">
           <td class="mono">${esc(r.id) || `<span class="bad-value">—</span>`}</td>
@@ -1929,7 +2008,7 @@ function renderData() {
           <td>${cell(r, "status")}</td>
           <td class="muted">${esc(r._channels.join(", "))}</td>
           <td class="muted" style="white-space:nowrap">${esc(r._source)} · ${r._sheetRow}</td>
-          <td>${r._issues.length ? r._issues.map(i => `<span class="sev ${i.severity}" title="${esc(i.message)}">${i.severity === "error" ? "E" : "W"}</span>`).join(" ") : ""}</td>
+          <td>${r._issues.length ? r._issues.map(i => `<span class="sev ${i.severity} ${isDismissed(i) ? "dismissed" : ""}" title="${esc(i.message)}${isDismissed(i) ? " (dismissed)" : ""}">${i.severity === "error" ? "E" : "W"}</span>`).join(" ") : ""}</td>
         </tr>`;
       }).join("")}
       </tbody>
@@ -2058,6 +2137,9 @@ document.addEventListener("change", e => {
   if (t.dataset.filter) {
     state.filters[t.dataset.filter] = t.value;
     render();
+  } else if (t.dataset.tint !== undefined) {
+    state.tint = t.checked;
+    render();
   } else if (t.dataset.kpiShow !== undefined) {
     t.checked ? state.kpiShow.add(t.dataset.kpiShow) : state.kpiShow.delete(t.dataset.kpiShow);
     render();
@@ -2129,8 +2211,11 @@ function kpiPrompt() {
 
 function renderKpiToggles(ctx) {
   $("#kpiToggles").innerHTML = ctx ? `KPIs ${Object.entries(ctx.kpi.defs).map(([k, d]) =>
-    `<label><input type="checkbox" data-kpi-show="${esc(k)}" ${state.kpiShow.has(k) ? "checked" : ""}>${esc(d.label)}</label>`).join("")}` : "";
+    `<label><input type="checkbox" data-kpi-show="${esc(k)}" ${state.kpiShow.has(k) ? "checked" : ""}>${esc(d.label)}</label>`).join("")}
+    <label title="Shade each day by its orders status, so problem days stand out"><input type="checkbox" data-tint ${state.tint ? "checked" : ""}>Tint days</label>` : "";
 }
+// The KPI used to tint the calendar: orders, else the first summed KPI.
+const tintKpi = ctx => (ctx.kpi.defs.orders ? "orders" : Object.keys(ctx.kpi.defs).find(k => !ctx.kpi.defs[k].derived));
 
 // KPI rows under the date axis, on the same day columns as the bars.
 function kpiStripHTML(ctx, mStart, mEnd, n, pxPerDay) {
@@ -2267,6 +2352,329 @@ function renderWeekKpi(ws) {
   document.addEventListener("scroll", () => { tip.style.display = "none"; current = null; }, true);
 })();
 
+/* ---------- Edit in sheet ---------- */
+
+// <editUrl>#gid=<gid>&range=A<row>. A pasted link may carry ?usp=… or #gid=…;
+// everything after /edit is dropped.
+function sheetLink(cfg, row) {
+  if (!cfg?.editUrl) return null;
+  const url = cfg.editUrl.trim();
+  const m = /^(.*?\/edit)/.exec(url);
+  const base = m ? m[1] : url.replace(/[?#].*$/, "");
+  return `${base}#gid=${cfg.gid ?? 0}${row ? `&range=A${row}` : ""}`;
+}
+const NO_LINK_TIP = "Add this sheet's link in the config to enable editing.";
+function editButton(sourceIdx, row, label = "Edit in sheet", small = false) {
+  const src = state.sources[sourceIdx];
+  const href = src ? sheetLink(configFor(src), row) : null;
+  const cls = `btn${small ? " btn-sm" : ""}`;
+  return href
+    ? `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener" title="Open ${esc(src.label)}${row ? `, row ${row}` : ""} in Google Sheets">${label} ↗</a>`
+    : `<span class="${cls} disabled" aria-disabled="true" title="${NO_LINK_TIP}">${label}</span>`;
+}
+
+function sheetsMenuHTML() {
+  const items = CONFIG.sources.filter(c => c.editUrl);
+  return `<details class="ms sheets-menu" data-menu="sheets" ${state.openMenu === "sheets" ? "open" : ""}>
+    <summary>Open sheets</summary>
+    <div class="ms-menu" style="right:0;left:auto;min-width:260px">
+      ${items.length ? items.map(c => `<a class="menu-link" href="${esc(sheetLink(c))}" target="_blank" rel="noopener">${esc(c.label)} <span class="faint">${esc(c.type || "")}</span></a>`).join("")
+        : `<div class="faint" style="padding:6px 8px;max-width:260px">No sheet links yet. Add <span class="mono">editUrl</span> and <span class="mono">gid</span> to each source in the CONFIG block at the top of index.html.</div>`}
+    </div></details>`;
+}
+
+/* ---------- Reload data ---------- */
+
+// Remembered file handles (Chrome and Edge), so "Reload data" can re-read the
+// same files without picking them again. Kept in IndexedDB; every call is
+// best-effort and the page works without it.
+const handleStore = {
+  open() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open("marketingTracker", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("handles");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async put(label, handle) {
+    try { const db = await this.open(); db.transaction("handles", "readwrite").objectStore("handles").put(handle, label); } catch { /* not available */ }
+  },
+  async all() {
+    try {
+      const db = await this.open();
+      return await new Promise(resolve => {
+        const out = new Map();
+        const cur = db.transaction("handles").objectStore("handles").openCursor();
+        cur.onsuccess = () => { const c = cur.result; if (c) { out.set(c.key, c.value); c.continue(); } else resolve(out); };
+        cur.onerror = () => resolve(out);
+      });
+    } catch { return new Map(); }
+  },
+  async clear() {
+    try { const db = await this.open(); db.transaction("handles", "readwrite").objectStore("handles").clear(); } catch { /* not available */ }
+  },
+};
+
+async function pickFiles() {
+  if (!window.showOpenFilePicker) { $("#filePicker").click(); return; }
+  try {
+    const handles = await window.showOpenFilePicker({ multiple: true, types: [{ description: "CSV or dismissals JSON", accept: { "text/csv": [".csv"], "application/json": [".json"] } }] });
+    const files = await Promise.all(handles.map(h => h.getFile()));
+    addFiles(files, new Map(handles.map(h => [h.name, h])));
+  } catch (e) {
+    if (e.name !== "AbortError") $("#filePicker").click();
+  }
+}
+
+async function fetchUrlSource(c) {
+  const base = { label: c.label || c.url, origin: "url", url: c.url };
+  try {
+    const res = await fetch(c.url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    if (/^\s*<(!doctype|html)/i.test(text)) throw new Error("got a web page instead of CSV. Use the 'Publish to web' CSV link.");
+    return { ...base, text };
+  } catch (e) {
+    return { ...base, text: "", loadError: e.message || String(e) };
+  }
+}
+
+// Re-fetch every URL source and re-read every remembered file. View, period,
+// filters and the open panel stay as they are.
+async function reloadData() {
+  notice("Reloading…", true);
+  const urlSources = CONFIG.mode === "urls" ? await Promise.all(CONFIG.sources.filter(c => c.url).map(fetchUrlSource)) : [];
+  const missing = [];
+  let reread = 0;
+  const files = await Promise.all(state.sources.filter(s => s.origin === "file").map(async s => {
+    const h = state.handles.get(s.label);
+    if (!h) { missing.push(s.label); return s; }
+    try {
+      if (h.queryPermission && (await h.queryPermission({ mode: "read" })) !== "granted" && (await h.requestPermission({ mode: "read" })) !== "granted") throw new Error("permission");
+      const f = await h.getFile();
+      reread++;
+      return { label: s.label, text: await f.text(), origin: "file" };
+    } catch {
+      missing.push(s.label);
+      return s;
+    }
+  }));
+  state.sources = [...urlSources, ...files];
+  if (CONFIG.mode === "local") storageSet(state.sources.filter(s => s.origin === "file" && !s.loadError).map(({ label, text }) => ({ label, text })));
+  rebuild();
+  const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const done = [urlSources.length ? `${urlSources.length} sheet${urlSources.length === 1 ? "" : "s"}` : "", reread ? `${reread} file${reread === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ");
+  notice(`${done ? `Reloaded ${done} at ${time}.` : ""}${missing.length
+    ? ` ${missing.length === 1 ? "This file" : "These files"} can't be re-read automatically in this browser: ${missing.map(esc).join(", ")}. <button data-action="pick">Choose ${missing.length === 1 ? "it" : "them"} again</button>`
+    : ""}`, missing.length > 0);
+}
+
+let noticeTimer;
+function notice(html, sticky = false) {
+  const el = $("#notice");
+  el.innerHTML = `${html} <button class="link" data-action="close-notice" aria-label="Dismiss">×</button>`;
+  el.classList.remove("hidden");
+  clearTimeout(noticeTimer);
+  if (!sticky) noticeTimer = setTimeout(() => el.classList.add("hidden"), 6000);
+}
+
+/* ---------- Day panel ---------- */
+
+function openDay(day) { state.panelKey = null; state.panelBackDay = null; state.panelDay = day; renderPanel(); }
+
+function kpiStatusChip(st) {
+  if (st.status === "none") return "";
+  if (st.status === "no_actual") return `<span class="chip kst">No actual yet</span>`;
+  return `<span class="chip kst s-${st.status}-cell">${esc(statusText(st).replace(" (at or above forecast)", ""))}</span>`;
+}
+
+function dayKpiTable(kpi, vertical, label, day) {
+  const ctx = { kpi, vertical, label };
+  const defs = kpi.defs;
+  let rowsHtml = "", firstRows = null;
+  for (const [key, def] of Object.entries(defs)) {
+    const p = kpiPoint(kpi, vertical, key, day);
+    if (!p || p.forecast == null) continue;
+    if (!def.derived && !firstRows) firstRows = p.rows;
+    const st = kpiStatusOf(ctx, key, p);
+    const v = x => fmtKpi(x, def);
+    rowsHtml += `<tr>
+      <th>${esc(def.label)}</th>
+      <td>${v(p.forecast)}${p.bear != null ? `<div class="faint">bear ${fmtNum(Math.round(p.bear))} · bull ${fmtNum(Math.round(p.bull))}</div>` : ""}</td>
+      <td class="${p.actual != null ? `s-${st.status}-cell` : "na"}">${p.actual != null ? v(p.actual) : "no actual yet"}${p.actualOverridden ? `<div class="faint">overrides engine ${fmtNum(Math.round(p.actualOverridden.was))}</div>` : ""}</td>
+      <td>${p.actual != null ? `${signed(st.delta, x => fmtNum(Math.round(x) || 0))}<div class="faint">${fmtPct(st.deltaPct, true)}</div>` : "—"}</td>
+      <td>${kpiStatusChip(st)}</td></tr>`;
+  }
+  if (!rowsHtml) return "";
+  const links = firstRows?.forecast ? editButton(firstRows.forecast.sourceIdx, firstRows.forecast.sheetRow, "Edit in sheet", true) : "";
+  const actualLink = firstRows?.actual && firstRows.actual.sourceIdx !== firstRows.forecast?.sourceIdx ? editButton(firstRows.actual.sourceIdx, firstRows.actual.sheetRow, "Edit actual", true) : "";
+  return `<div class="day-kpi">
+    <div class="day-kpi-head"><strong>${esc(label)}</strong><span class="spacer"></span>${links}${actualLink}</div>
+    <table><thead><tr><th></th><th>Forecast</th><th>Actual</th><th>Delta</th><th>Status</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
+}
+
+function renderDayPanel(root) {
+  const day = state.panelDay;
+  const [y] = dayParts(day);
+  const kpi = state.data.kpi;
+  const ctx = kpiContext();
+  const live = state.data.rows.filter(r => passes(r) && r._start !== null && r._end !== null && r._start <= day && r._end >= day);
+  const tierRank = r => ({ T1: 0, T2: 1, T3: 2 }[momentTier(r)] ?? 3);
+  const moments = live.filter(r => r.tier === MOMENT).sort((a, b) => tierRank(a) - tierRank(b) || barName(a).localeCompare(barName(b)));
+  const campaigns = live.filter(r => r.tier !== MOMENT);
+  const byVertical = new Map();
+  for (const r of campaigns) {
+    const v = r.vertical || "(no vertical)";
+    if (!byVertical.has(v)) byVertical.set(v, []);
+    byVertical.get(v).push(r);
+  }
+  const verticals = uniqueSorted([...byVertical.keys()], ALLOWED.vertical);
+  const tierOrder = r => TIER_ORDER.indexOf(r.tier) < 0 ? 9 : TIER_ORDER.indexOf(r.tier);
+
+  // KPI tables: the series in view first, then any other loaded verticals
+  const kpiVerticals = ctx ? [ctx.vertical, ...[...kpi.verticals.keys()].filter(v => v !== ctx.vertical)] : [];
+  const kpiHtml = kpiVerticals.map(v => dayKpiTable(kpi, v, v === KPI_TOTAL ? "Company total" : v, day)).join("");
+  const headline = (() => {
+    if (!ctx || !kpi.defs.orders) return "";
+    const p = kpiPoint(kpi, ctx.vertical, "orders", day);
+    const st = kpiStatusOf(ctx, "orders", p);
+    if (st.status === "none") return "";
+    return `<div class="day-headline s-${st.status}-cell">${st.status === "no_actual" ? `Orders forecast ${fmtNum(Math.round(p.forecast))} · no actual yet`
+      : `Orders ${fmtPct(st.deltaPct, true)} vs forecast · ${esc(statusText(st).replace(" (at or above forecast)", ""))}`}</div>`;
+  })();
+
+  root.innerHTML = `
+    <div class="panel-backdrop" data-action="close-panel"></div>
+    <aside class="panel" role="dialog" aria-modal="true" aria-labelledby="panelTitle">
+      <div class="panel-head" style="--c:var(--text)">
+        <div class="top">
+          <span class="chip tier">Day</span>${day === todayDay() ? `<span class="chip" style="background:var(--error);color:#fff">Today</span>` : ""}
+          <span class="spacer" style="flex:1"></span>
+          <button class="btn btn-sm" data-day="${day - 1}" aria-label="Previous day">‹</button>
+          <button class="btn btn-sm" data-day="${day + 1}" aria-label="Next day">›</button>
+          <button class="close" data-action="close-panel" aria-label="Close">×</button>
+        </div>
+        <h2 id="panelTitle">${DAYS_SHORT[weekday(day)]} ${fmtDay(day)}</h2>
+        <div class="muted">Week of ${fmtDayShort(weekStart(day))} ${y}</div>
+      </div>
+      <div class="panel-body">
+        ${headline}
+        <h4>KPIs</h4>
+        ${kpiHtml || `<p class="text empty">${ctx ? "No forecast for this day." : "No KPI file loaded."}</p>`}
+
+        <h4>Seasonal moments (${moments.length})</h4>
+        ${moments.length ? moments.map(relCard).join("") : `<p class="text empty">No seasonal moments on this day</p>`}
+
+        <h4>Campaigns live (${campaigns.length})</h4>
+        ${verticals.length ? verticals.map(v => `<div class="day-vertical"><span class="vdot" style="background:${verticalColor(v)}"></span>${esc(v)} <span class="faint">${byVertical.get(v).length}</span></div>
+          ${byVertical.get(v).sort((a, b) => tierOrder(a) - tierOrder(b) || a._start - b._start).map(relCard).join("")}`).join("")
+          : `<p class="text empty">No campaigns live on this day</p>`}
+        ${filterParts().length ? `<p class="faint" style="font-size:12px;margin-top:12px">Showing moments and campaigns that match the current filters.</p>` : ""}
+      </div>
+    </aside>`;
+  root.querySelector(".close").focus({ preventScroll: true });
+}
+
+/* ---------- Dismissed issues ---------- */
+
+// Dismissals are keyed by issue fingerprint (type + row id or date + the values
+// that caused it), so an issue whose data changes comes back on its own.
+// Called while `state` is being created, so it can't rely on consts declared below it.
+function loadDismissals() {
+  const DISMISS_KEY = "marketingTracker.dismissals.v1";
+  try {
+    const raw = JSON.parse(localStorage.getItem(DISMISS_KEY) || "{}");
+    return new Map(Object.entries(raw));
+  } catch { return new Map(); }
+}
+function saveDismissals() {
+  try { localStorage.setItem("marketingTracker.dismissals.v1", JSON.stringify(Object.fromEntries(state.dismissals))); } catch { /* storage blocked: dismissals last until the page closes */ }
+}
+const isDismissed = i => state.dismissals.has(i.fingerprint);
+const activeIssues = issues => issues.filter(i => !isDismissed(i));
+
+function dismissIssues(fingerprints, note) {
+  const at = new Date().toISOString();
+  for (const fp of fingerprints) {
+    const i = state.data.issues.find(x => x.fingerprint === fp);
+    state.dismissals.set(fp, { note: note || "", at, code: i?.code, severity: i?.severity, message: i?.message, source: i?.source, id: i?.id });
+  }
+  saveDismissals();
+  state.dismissForm = null;
+  render();
+}
+function restoreIssue(fp) { state.dismissals.delete(fp); saveDismissals(); render(); }
+function cleanStaleDismissals() {
+  const live = new Set(state.data.issues.map(i => i.fingerprint));
+  for (const fp of [...state.dismissals.keys()]) if (!live.has(fp)) state.dismissals.delete(fp);
+  saveDismissals(); render();
+}
+
+function exportDismissals() {
+  const payload = {
+    type: "marketing-tracker-dismissals", version: 1, exportedAt: new Date().toISOString(),
+    dismissals: [...state.dismissals].map(([fingerprint, d]) => ({ fingerprint, ...d })),
+  };
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+  a.download = `tracker-dismissals-${dayToISO(todayDay())}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+async function importDismissals(file) {
+  try {
+    const data = JSON.parse(await file.text());
+    if (data?.type !== "marketing-tracker-dismissals" || !Array.isArray(data.dismissals)) throw new Error("not a dismissals file");
+    let added = 0;
+    for (const d of data.dismissals) {
+      if (!d.fingerprint) continue;
+      const { fingerprint, ...rest } = d;
+      if (!state.dismissals.has(fingerprint)) added++;
+      state.dismissals.set(fingerprint, rest);
+    }
+    saveDismissals();
+    render();
+    const matching = data.dismissals.filter(d => state.data.issues.some(i => i.fingerprint === d.fingerprint)).length;
+    notice(`Imported ${data.dismissals.length} dismissal${data.dismissals.length === 1 ? "" : "s"} from ${esc(file.name)} (${added} new; ${matching} match current issues).`);
+  } catch (e) {
+    notice(`Couldn't import ${esc(file.name)}: ${esc(e.message)}. Expected a file made with Export dismissals.`, true);
+  }
+}
+
+// Marker for a row's issues: active error / active warning / a dismissed error only.
+function rowIssueState(r) {
+  const act = activeIssues(r._issues);
+  if (act.some(i => i.severity === "error")) return "error";
+  if (act.length) return "warning";
+  if (r._issues.some(i => i.severity === "error")) return "dismissed";
+  return "";
+}
+function issueDot(r) {
+  const s = rowIssueState(r);
+  return s ? `<span class="idot ${s}" title="${s === "dismissed" ? "Has a dismissed error" : `Has ${s}s`}"></span>` : "";
+}
+
+function issueRowHTML(i, sameType) {
+  const where = `${esc(i.source)}${i.sheetRow ? ` <span class="muted">· row ${i.sheetRow}</span>` : ` <span class="muted">· file</span>`}`;
+  const target = i.rowKey ? `data-row="${esc(i.rowKey)}"` : i.day != null ? `data-day="${i.day}"` : "";
+  const form = state.dismissForm && state.dismissForm.fingerprints.includes(i.fingerprint) && state.dismissForm.anchor === i.fingerprint;
+  return `<tr class="${target ? "clickable" : ""}" ${target}>
+      <td><span class="sev ${i.severity}">${i.severity === "error" ? "Error" : "Warning"}</span></td>
+      <td style="white-space:nowrap">${where}</td>
+      <td class="mono">${esc(i.id)}</td>
+      <td>${esc(i.message)}</td>
+      <td class="issue-actions">${editButton(i.sourceIdx, i.sheetRow, "Edit in sheet", true)}
+        <button class="btn btn-sm" data-action="dismiss" data-fp="${esc(i.fingerprint)}">Dismiss</button>
+        ${sameType > 1 ? `<button class="btn btn-sm" data-action="dismiss-type" data-fp="${esc(i.fingerprint)}" title="${esc(ISSUE_TYPES[i.code] || i.code)}">All ${sameType} like this</button>` : ""}</td>
+    </tr>${form ? `<tr class="dismiss-form"><td colspan="5">
+      <label>${state.dismissForm.fingerprints.length > 1 ? `Dismiss all ${state.dismissForm.fingerprints.length} “${esc(ISSUE_TYPES[i.code] || i.code)}” ${i.severity}s showing now.` : `Dismiss this ${i.severity}.`}
+      Note (optional): <input id="dismissNote" type="text" placeholder="e.g. Intentional: standalone occasion" maxlength="200"></label>
+      <button class="btn btn-sm primary" data-action="dismiss-confirm">Dismiss</button>
+      <button class="btn btn-sm" data-action="dismiss-cancel">Cancel</button>
+      ${state.dismissForm.fingerprints.length > 1 ? `<span class="faint">New issues of this type will still show.</span>` : ""}</td></tr>` : ""}`;
+}
+
 /* ---------- Weekly view ---------- */
 
 const TIER_ORDER = [MOMENT, BRAND, TACTICAL];
@@ -2301,7 +2709,7 @@ function weekCard(r, ws, we, kind) {
   else if (r.parent_id) parent = `↳ Parent: <span class="bad-value">${esc(r.parent_id)}</span> (not found)`;
   else if (r.tier !== MOMENT) parent = `↳ <span class="faint">No parent</span>`;
   return `<button class="wk-card" data-row="${esc(r._key)}" style="--c:${verticalColor(r.vertical)}">
-    <div class="t"><span class="name">${r._issues.length ? `<span class="idot ${r._issues.some(i => i.severity === "error") ? "error" : "warning"}" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;background:${r._issues.some(i => i.severity === "error") ? "var(--error)" : "#e08a00"}"></span>` : ""}${esc(barName(r))}</span><span class="chips">${prioChip(r)}${statusChip(r.status)}</span></div>
+    <div class="t"><span class="name">${issueDot(r)}${esc(barName(r))}</span><span class="chips">${prioChip(r)}${statusChip(r.status)}</span></div>
     <div class="meta">${when}${r._tentative ? ` · <span class="tent">date tentative</span>` : ""}</div>
     <div class="meta">${facts}</div>
     <div class="meta">Channels: ${r._channels.length ? esc(r._channels.join(", ")) : `<span class="faint">none</span>`}</div>
@@ -2361,8 +2769,13 @@ function renderUndatedNote(sel, rows) {
 
 /* ---------- Side panel ---------- */
 
-function openPanel(key) { state.panelKey = key; renderPanel(); }
-function closePanel() { state.panelKey = null; renderPanel(); }
+function openPanel(key) {
+  state.panelBackDay = state.panelDay ?? (state.panelKey ? state.panelBackDay : null);
+  state.panelDay = null;
+  state.panelKey = key;
+  renderPanel();
+}
+function closePanel() { state.panelKey = null; state.panelDay = null; state.panelBackDay = null; renderPanel(); }
 
 function relCard(r) {
   const dates = r._start !== null && r._end !== null ? `${fmtDay(r._start)} – ${fmtDay(r._end)}` : "invalid dates";
@@ -2375,6 +2788,7 @@ function relCard(r) {
 
 function renderPanel() {
   const root = $("#panelRoot");
+  if (state.panelDay != null && state.data) { renderDayPanel(root); return; }
   const r = state.panelKey && state.data ? state.data.byKey.get(state.panelKey) : null;
   if (!r) { root.innerHTML = ""; return; }
   const { byKey } = state.data;
@@ -2400,6 +2814,7 @@ function renderPanel() {
           <span class="chip tier">${esc(r.tier || "No tier")}</span>${prioChip(r)}${statusChip(r.status)}${r._tentative ? `<span class="chip tent">Date tentative</span>` : ""}
           <button class="close" data-action="close-panel" aria-label="Close">×</button>
         </div>
+        ${state.panelBackDay != null ? `<button class="link" data-day="${state.panelBackDay}">← Back to ${fmtDayShort(state.panelBackDay)}</button>` : ""}
         <h2 id="panelTitle">${esc(barName(r))}</h2>
         <div class="muted"><span class="mono">${esc(r.id || "no id")}</span> · ${esc(r._source)}, row ${r._sheetRow}</div>
       </div>
@@ -2417,9 +2832,10 @@ function renderPanel() {
           <dt>Budget</dt><dd>${r._budget !== null ? `QAR ${r._budget.toLocaleString("en-US")}` : r.budget_qar ? `<span class="bad-value">${esc(r.budget_qar)}</span>` : `<span class="faint">—</span>`}</dd>
           <dt>Source</dt><dd>${esc(r._source)} · row ${r._sheetRow}</dd>
         </dl>
-        ${r._start !== null && r._end !== null ? `<button data-action="locate" data-key="${esc(r._key)}">Show on month roadmap</button>` : ""}
+        <div class="panel-actions">${editButton(r._sourceIdx, r._sheetRow)}
+        ${r._start !== null && r._end !== null ? `<button data-action="locate" data-key="${esc(r._key)}">Show on month roadmap</button>` : ""}</div>
 
-        ${r._issues.length ? `<h4>Data issues (${r._issues.length})</h4>${r._issues.map(i => `<div class="issue"><span class="sev ${i.severity}">${i.severity === "error" ? "Error" : "Warning"}</span><span>${esc(i.message)}</span></div>`).join("")}` : ""}
+        ${r._issues.length ? `<h4>Data issues (${activeIssues(r._issues).length}${r._issues.length > activeIssues(r._issues).length ? ` + ${r._issues.length - activeIssues(r._issues).length} dismissed` : ""})</h4>${r._issues.map(i => `<div class="issue ${isDismissed(i) ? "is-dismissed" : ""}"><span class="sev ${i.severity}">${i.severity === "error" ? "Error" : "Warning"}</span><span>${esc(i.message)}${isDismissed(i) ? ` <em class="faint">Dismissed${state.dismissals.get(i.fingerprint).note ? `: ${esc(state.dismissals.get(i.fingerprint).note)}` : ""}</em>` : ""}</span></div>`).join("")}` : ""}
 
         <h4>Parent</h4>
         ${p ? relCard(p) : r.parent_id ? `<p class="text"><span class="bad-value">${esc(r.parent_id)}</span> doesn't match any loaded id.</p>` : `<p class="text empty">${r.tier === MOMENT ? "Seasonal moments have no parent" : "No parent"}</p>`}
@@ -2500,11 +2916,26 @@ window.addEventListener("afterprint", () => {
 
 document.addEventListener("click", e => {
   if (state.openMenu && !e.target.closest(".ms")) { state.openMenu = null; renderFilters(); }
-  const t = e.target.closest("[data-action],[data-view],[data-toggle],[data-sev],[data-row],[data-nav],[data-group]");
+  if (e.target.closest("a[href]")) return;   // links (Edit in sheet) open on their own
+  const t = e.target.closest("[data-action],[data-view],[data-toggle],[data-sev],[data-row],[data-day],[data-nav],[data-group]");
   if (!t) return;
-  if (t.dataset.action === "pick") $("#filePicker").click();
-  else if (t.dataset.action === "clear") clearData();
-  else if (t.dataset.action === "reload") loadUrls();
+  const a = t.dataset.action;
+  if (a === "pick") pickFiles();
+  else if (a === "clear") clearData();
+  else if (a === "reload") reloadData();
+  else if (a === "close-notice") $("#notice").classList.add("hidden");
+  else if (a === "dismiss" || a === "dismiss-type") {
+    const i = state.data.issues.find(x => x.fingerprint === t.dataset.fp);
+    const fps = a === "dismiss" ? [i.fingerprint] : activeIssues(state.data.issues).filter(x => x.code === i.code && x.severity === i.severity).map(x => x.fingerprint);
+    state.dismissForm = { anchor: i.fingerprint, fingerprints: fps };
+    renderIssues();
+  }
+  else if (a === "dismiss-confirm") dismissIssues(state.dismissForm.fingerprints, $("#dismissNote")?.value.trim());
+  else if (a === "dismiss-cancel") { state.dismissForm = null; renderIssues(); }
+  else if (a === "restore") restoreIssue(t.dataset.fp);
+  else if (a === "clean-dismissals") cleanStaleDismissals();
+  else if (a === "export-dismissals") exportDismissals();
+  else if (a === "import-dismissals") $("#dismissImport").click();
   else if (t.dataset.action === "today") { state.cursor = todayDay(); render(); }
   else if (t.dataset.action === "close-panel") closePanel();
   else if (t.dataset.action === "locate") locate(t.dataset.key);
@@ -2521,7 +2952,15 @@ document.addEventListener("click", e => {
   else if (t.dataset.toggle) $(`#${t.dataset.toggle}`).classList.toggle("collapsed");
   else if (t.dataset.sev) { state.issueFilter = t.dataset.sev; renderIssues(); }
   else if (t.dataset.row) openPanel(t.dataset.row);
+  else if (t.dataset.day) openDay(+t.dataset.day);
 });
+$("#dismissImport").addEventListener("change", e => { if (e.target.files[0]) importDismissals(e.target.files[0]); e.target.value = ""; });
+document.addEventListener("keydown", e => {
+  if (e.target.id === "dismissNote" && e.key === "Enter") { e.preventDefault(); dismissIssues(state.dismissForm.fingerprints, e.target.value.trim()); }
+});
+document.addEventListener("toggle", e => {
+  if (e.target.matches?.("[data-dismissed-box]")) state.dismissedOpen = e.target.open;
+}, true);
 $("#filePicker").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
 
 function step(dir) {
@@ -2534,7 +2973,7 @@ $("#weekJump").addEventListener("change", e => {
   if (d !== null) { state.cursor = d; render(); }
 });
 $("#paperSize").addEventListener("change", applyPaperSize);
-document.addEventListener("keydown", e => { if (e.key === "Escape" && state.panelKey) closePanel(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && (state.panelKey || state.panelDay != null)) closePanel(); });
 $("#monthJump").addEventListener("change", e => {
   const [y, m] = (e.target.value || "").split("-").map(Number);
   if (y && m) { state.cursor = dayFromYMD(y, m - 1, 1); render(); }
@@ -2561,13 +3000,18 @@ document.addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth
 document.addEventListener("dragover", e => e.preventDefault());
 document.addEventListener("drop", e => {
   e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging");
-  if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files);
+  if (!e.dataTransfer?.files?.length) return;
+  const files = [...e.dataTransfer.files];
+  // Ask for file handles while the drop event is live (Chrome/Edge), so Reload can re-read them.
+  const pending = [...e.dataTransfer.items].filter(i => i.kind === "file" && i.getAsFileSystemHandle).map(i => i.getAsFileSystemHandle().catch(() => null));
+  Promise.all(pending).then(hs => addFiles(files, new Map(hs.filter(h => h && h.kind === "file").map(h => [h.name, h]))));
 });
 
 /* ---------- Start ---------- */
 
 try { const paper = localStorage.getItem("marketingTracker.paper"); if (paper) $("#paperSize").value = paper; } catch { /* ignore */ }
 applyPaperSize();
+handleStore.all().then(h => { state.handles = h; });
 
 if (CONFIG.mode === "urls") {
   render();
