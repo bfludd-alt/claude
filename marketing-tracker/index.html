@@ -463,7 +463,7 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
 <main>
   <section id="emptyState" class="dropzone hidden">
     <h2>Load your marketing plan</h2>
-    <p>Drop the CSV exports here: the shared Seasonal Moments file plus one file per vertical.</p>
+    <p>Drop the CSV exports here: the shared Seasonal Moments file, one file per vertical, and the KPI forecast export.</p>
     <button class="primary" data-action="pick">Choose CSV files</button>
   </section>
 
@@ -723,7 +723,7 @@ function buildPlan(sources, options = {}) {
     summaries.push(summary);
     if (src.loadError) { add({ severity: "error", code: "load_failed", src, message: `Could not load: ${src.loadError}`, values: [src.loadError] }); continue; }
 
-    const { records, unterminated } = parseCSV(src.text || "");
+    const { records, unterminated } = src._records ? { records: src._records, unterminated: src._unterminated } : parseCSV(src.text || "");
     if (unterminated) add({ severity: "error", code: "unterminated_quote", src, message: "File ends inside a quoted cell (a \" is missing its closing quote). The last row may be incomplete." });
     if (!records.length || records[0].every(c => !c.trim())) {
       add({ severity: "error", code: "empty_file", src, message: "File is empty or has no header row." });
@@ -926,16 +926,461 @@ function buildPlan(sources, options = {}) {
 
   return { rows, byKey, byId, issues, summaries };
 }
+/* ---------- KPI forecasts ---------- */
+
+// Forecasting engine export, read in its native layout:
+//   row 1  title, e.g. "LAYER 1 — Orders & GMV | 180-Day Tracking" (skipped)
+//   row 2  header (cells contain line breaks and "Err%" repeats, so columns are read by position)
+//   row 3+ one row per day
+// Column 2 (Day) and the Err% columns are ignored: weekdays come from the date
+// and attainment is recalculated.
+const ENGINE_LAYOUT = {
+  date: 0,
+  kpis: {
+    orders:  { bear: 2, forecast: 3, bull: 4, actual: 5 },
+    gmv_qar: { bear: 9, forecast: 10, bull: 11, actual: 12 },
+  },
+  firstDataRow: 3,   // sheet row of the first day
+};
+const KPI_TOTAL = "Total";
+const SCENARIO_FIELDS = ["forecast", "bear", "bull", "actual"];
+
+Object.assign(ISSUE_TYPES, {
+  kpi_not_kpi_file: "KPI source isn't in a known KPI layout",
+  kpi_vertical_unset: "KPI file's vertical isn't set",
+  kpi_duplicate_source: "Two KPI files for the same vertical",
+  kpi_unknown_vertical: "Unknown vertical in a KPI source",
+  kpi_unknown_kpi: "Unknown KPI",
+  kpi_bad_date: "Unreadable KPI date",
+  kpi_bad_number: "Unreadable KPI number",
+  kpi_duplicate_date: "Duplicate KPI date",
+  kpi_gap: "Gap in the KPI dates",
+  kpi_forecast_range: "Forecast outside the bear–bull range",
+  kpi_missing_actual: "Past day with no actual",
+});
+
+// Numbers may carry thousands separators and quotes ("101,623", "10,077,762.51").
+// Returns null for blank, NaN for anything unreadable.
+function parseNumber(s) {
+  const t = String(s ?? "").replace(/["'\s,]/g, "");
+  if (!t) return null;
+  return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(t) ? Number(t) : NaN;
+}
+function parseAnyDate(s) { const t = s.trim(); return parseISODate(t) ?? parseDMYDate(t); }
+
+// What kind of file is this? Decided from the contents, never the file name.
+function detectFileType(records) {
+  const first = (records[0] || []).map(c => c.trim());
+  const second = (records[1] || []).map(c => c.trim());
+  if (/^layer\b/i.test(first[0] || "")) return "kpi_engine";
+  if ((second[0] || "").toLowerCase() === "date" && /bear/i.test(second[2] || "")) return "kpi_engine";
+  const h = first.map(normHeader);
+  if (h.includes("date") && h.includes("kpi") && (h.includes("forecast") || h.includes("actual"))) return "kpi_long";
+  return "plan";
+}
+function engineLayer(records) {
+  const m = /layer\s*(\d+)/i.exec((records[0] || [])[0] || "");
+  return m ? +m[1] : null;
+}
+// The vertical an engine file belongs to: the config entry wins, else Layer 1 = Total.
+function engineVertical(src, records) {
+  if (src.vertical) return src.vertical;
+  return engineLayer(records) === 1 ? KPI_TOTAL : null;
+}
+const KPI_VERTICALS = () => [KPI_TOTAL, ...ALLOWED.vertical.filter(v => v !== "Cross-vertical")];
+
+/**
+ * KPI sources: forecasting engine exports and long-format files
+ * (date, vertical, kpi, forecast, forecast_bear, forecast_bull, actual).
+ * Long-format actuals override the engine's for the same date, vertical and KPI;
+ * their forecast (with its bear and bull) only fills days that have no forecast.
+ * options: { kpiDefinitions, kpiStatus: { mode, thresholdPct }, today }
+ */
+function buildKpi(sources, options = {}) {
+  const defs = options.kpiDefinitions || {};
+  const baseKpis = Object.keys(defs).filter(k => !defs[k].derived);
+  const today = options.today ?? todayDay();
+  const issues = [], summaries = [];
+  const add = (o) => { const i = makeIssue(o); issues.push(i); return i; };
+  const verticals = new Map();   // vertical -> { name, sources: [sourceIdx], statusMode, series: Map(kpi -> Map(day -> point)) }
+  const knownVerticals = KPI_VERTICALS();
+
+  const vEntry = (name, statusMode) => {
+    if (!verticals.has(name)) verticals.set(name, { name, sources: [], statusMode: statusMode || null, series: new Map(baseKpis.map(k => [k, new Map()])) });
+    const v = verticals.get(name);
+    if (statusMode && !v.statusMode) v.statusMode = statusMode;
+    return v;
+  };
+  const checkRange = (src, p, kpi, day, sheetRow, vertical) => {
+    if (p.forecast == null || p.bear == null || p.bull == null) return;
+    const lo = Math.min(p.bear, p.bull), hi = Math.max(p.bear, p.bull);
+    if (p.forecast < lo || p.forecast > hi) {
+      add({ severity: "warning", code: "kpi_forecast_range", src, day, sheetRow, field: kpi, id: vertical,
+        message: `${defs[kpi]?.label || kpi} forecast ${fmtNum(p.forecast)} on ${fmtDay(day)} is outside the bear–bull range (${fmtNum(p.bear)} – ${fmtNum(p.bull)}).`,
+        values: [kpi, p.bear, p.forecast, p.bull] });
+    }
+  };
+  const flagGaps = (src, days, sheetRowOf, vertical) => {
+    const sorted = [...days].sort((a, b) => a - b);
+    for (let i = 1; i < sorted.length; i++) {
+      const missing = sorted[i] - sorted[i - 1] - 1;
+      if (missing > 0) {
+        const from = sorted[i - 1] + 1, to = sorted[i] - 1;
+        add({ severity: "warning", code: "kpi_gap", src, day: from, sheetRow: sheetRowOf(sorted[i]), id: vertical,
+          message: `No rows for ${missing === 1 ? fmtDay(from) : `${fmtDay(from)} – ${fmtDay(to)} (${missing} days)`}.`, values: [dayToISO(from), dayToISO(to)] });
+      }
+    }
+  };
+
+  const engines = sources.filter(s => s._fileType === "kpi_engine");
+  const longs = sources.filter(s => s._fileType === "kpi_long");
+
+  /* ---- Engine exports ---- */
+  for (const src of engines) {
+    const records = src._records;
+    const layer = engineLayer(records);
+    let vertical = engineVertical(src, records);
+    const summary = { label: src.label, origin: src.origin, sourceIdx: src._idx, kind: "kpi_engine", layer, vertical: null, rowCount: 0, blankRows: 0, firstDay: null, lastDay: null };
+    summaries.push(summary);
+    if (!vertical) {
+      add({ severity: "warning", code: "kpi_vertical_unset", src, sheetRow: 1,
+        message: `Layer ${layer ?? "?"} KPI file with no vertical set. Add a KPI entry for this file in the config with its vertical; shown as "Unassigned" until then.`, values: [layer] });
+      vertical = "Unassigned";
+    } else if (!knownVerticals.some(k => k.toLowerCase() === vertical.toLowerCase())) {
+      add({ severity: "warning", code: "kpi_unknown_vertical", src, sheetRow: 1, message: `KPI vertical "${vertical}" isn't a known vertical (${knownVerticals.join(", ")}).`, values: [vertical] });
+    } else vertical = knownVerticals.find(k => k.toLowerCase() === vertical.toLowerCase());
+    summary.vertical = vertical;
+    const ve = verticals.get(vertical);
+    if (ve && ve.sources.some(i => sources.find(s => s._idx === i)?._fileType === "kpi_engine")) {
+      const other = sources.find(s => s._idx === ve.sources[0]);
+      add({ severity: "error", code: "kpi_duplicate_source", src, sheetRow: 1,
+        message: `Another engine file for ${vertical} is already loaded (${other?.label}). This one was ignored; remove one of them.`, values: [vertical, other?.label] });
+      summary.ignored = true;
+      continue;
+    }
+    const v = vEntry(vertical, src.statusMode);
+    v.sources.push(src._idx);
+
+    const seen = new Map();   // day -> sheet row
+    for (let r = 2; r < records.length; r++) {
+      const cells = records[r];
+      const sheetRow = r + 1;
+      if (!cells.some(c => c.trim())) { summary.blankRows++; continue; }
+      const raw = (cells[ENGINE_LAYOUT.date] || "").trim();
+      const day = parseAnyDate(raw);
+      if (day === null) {
+        add({ severity: "error", code: "kpi_bad_date", src, sheetRow, id: vertical, message: `Date "${raw}" can't be read. Expected DD-Mmm-YY, e.g. 14-May-26.`, values: [raw] });
+        continue;
+      }
+      if (seen.has(day)) {
+        add({ severity: "error", code: "kpi_duplicate_date", src, day, sheetRow, id: vertical, message: `${fmtDay(day)} appears more than once (rows ${seen.get(day)} and ${sheetRow}); the first row is used.`, values: [seen.get(day), sheetRow] });
+        continue;
+      }
+      seen.set(day, sheetRow);
+      summary.rowCount++;
+      for (const [kpi, cols] of Object.entries(ENGINE_LAYOUT.kpis)) {
+        if (!v.series.has(kpi)) v.series.set(kpi, new Map());
+        const p = { forecast: null, bear: null, bull: null, actual: null, rows: {} };
+        for (const f of SCENARIO_FIELDS) {
+          const n = parseNumber(cells[cols[f]]);
+          if (Number.isNaN(n)) {
+            add({ severity: "error", code: "kpi_bad_number", src, day, sheetRow, field: kpi, id: vertical,
+              message: `${defs[kpi]?.label || kpi} ${f} "${cells[cols[f]]}" on ${fmtDay(day)} isn't a number.`, values: [kpi, f, cells[cols[f]]] });
+          } else p[f] = n;
+        }
+        p.rows.forecast = { sourceIdx: src._idx, sheetRow };
+        if (p.actual !== null) p.rows.actual = { sourceIdx: src._idx, sheetRow };
+        v.series.get(kpi).set(day, p);
+        checkRange(src, p, kpi, day, sheetRow, vertical);
+      }
+    }
+    const days = [...seen.keys()];
+    if (days.length) { summary.firstDay = Math.min(...days); summary.lastDay = Math.max(...days); }
+    flagGaps(src, days, d => seen.get(d), vertical);
+  }
+
+  /* ---- Long-format files ---- */
+  for (const src of longs) {
+    const records = src._records;
+    const summary = { label: src.label, origin: src.origin, sourceIdx: src._idx, kind: "kpi_long", vertical: null, verticalsSeen: new Set(), rowCount: 0, blankRows: 0, firstDay: null, lastDay: null };
+    summaries.push(summary);
+    const header = records[0].map(normHeader);
+    const col = {};
+    header.forEach((h, i) => { if (!(h in col)) col[h] = i; });
+    const missing = ["date", "vertical", "kpi"].filter(c => !(c in col));
+    if (missing.length) {
+      add({ severity: "error", code: "missing_columns", src, sheetRow: 1, message: `KPI file is missing column${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}`, values: missing });
+      continue;
+    }
+    const get = (cells, c) => (c in col ? (cells[col[c]] ?? "") : "").trim();
+    const seen = new Map();           // "vertical|kpi|day" -> sheet row
+    const daysByKey = new Map();      // "vertical|kpi" -> Map(day -> sheetRow), for gap checks
+    const warnedVertical = new Set(), warnedKpi = new Set();
+    for (let r = 1; r < records.length; r++) {
+      const cells = records[r];
+      const sheetRow = r + 1;
+      if (!cells.some(c => c.trim())) { summary.blankRows++; continue; }
+      const rawDate = get(cells, "date");
+      const day = parseAnyDate(rawDate);
+      if (day === null) { add({ severity: "error", code: "kpi_bad_date", src, sheetRow, id: get(cells, "vertical"), message: `Date "${rawDate}" can't be read. Use YYYY-MM-DD.`, values: [rawDate] }); continue; }
+      let vertical = get(cells, "vertical") || KPI_TOTAL;
+      const known = knownVerticals.find(k => k.toLowerCase() === vertical.toLowerCase());
+      if (known) vertical = known;
+      else if (!warnedVertical.has(vertical)) {
+        warnedVertical.add(vertical);
+        add({ severity: "warning", code: "kpi_unknown_vertical", src, sheetRow, message: `KPI vertical "${vertical}" isn't a known vertical (${knownVerticals.join(", ")}).`, values: [vertical] });
+      }
+      const rawKpi = get(cells, "kpi");
+      const kpi = baseKpis.find(k => k.toLowerCase() === rawKpi.toLowerCase());
+      if (!kpi) {
+        if (!warnedKpi.has(rawKpi)) {
+          warnedKpi.add(rawKpi);
+          const derived = Object.keys(defs).find(k => k.toLowerCase() === rawKpi.toLowerCase());
+          add({ severity: "warning", code: "kpi_unknown_kpi", src, sheetRow,
+            message: derived ? `KPI "${rawKpi}" is calculated by the tracker (${defs[derived].derived.join(" ÷ ")}); rows for it are ignored.` : `KPI "${rawKpi}" isn't defined in kpiDefinitions; its rows are ignored.`, values: [rawKpi] });
+        }
+        continue;
+      }
+      const key = `${vertical}|${kpi}|${day}`;
+      if (seen.has(key)) {
+        add({ severity: "error", code: "kpi_duplicate_date", src, day, sheetRow, field: kpi, id: vertical, message: `${vertical} ${defs[kpi].label || kpi} on ${fmtDay(day)} appears more than once (rows ${seen.get(key)} and ${sheetRow}); the first row is used.`, values: [vertical, kpi, seen.get(key), sheetRow] });
+        continue;
+      }
+      seen.set(key, sheetRow);
+      if (!daysByKey.has(`${vertical}|${kpi}`)) daysByKey.set(`${vertical}|${kpi}`, new Map());
+      daysByKey.get(`${vertical}|${kpi}`).set(day, sheetRow);
+      summary.rowCount++;
+      summary.verticalsSeen.add(vertical);
+      summary.firstDay = summary.firstDay === null ? day : Math.min(summary.firstDay, day);
+      summary.lastDay = summary.lastDay === null ? day : Math.max(summary.lastDay, day);
+
+      const vals = {};
+      for (const [f, c] of [["forecast", "forecast"], ["bear", "forecast_bear"], ["bull", "forecast_bull"], ["actual", "actual"]]) {
+        const n = parseNumber(get(cells, c));
+        if (Number.isNaN(n)) add({ severity: "error", code: "kpi_bad_number", src, day, sheetRow, field: kpi, id: vertical, message: `${c} "${get(cells, c)}" for ${vertical} ${defs[kpi].label || kpi} on ${fmtDay(day)} isn't a number.`, values: [vertical, kpi, c, get(cells, c)] });
+        else vals[f] = n;
+      }
+      const v = vEntry(vertical, src.statusMode);
+      if (!v.sources.includes(src._idx)) v.sources.push(src._idx);
+      const series = v.series.get(kpi);
+      const p = series.get(day) || { forecast: null, bear: null, bull: null, actual: null, rows: {} };
+      // A forecast and its bear/bull belong together: only fill them, as a set,
+      // when nothing has supplied a forecast for this day yet.
+      if (vals.forecast != null && p.forecast == null) {
+        p.forecast = vals.forecast; p.bear = vals.bear ?? null; p.bull = vals.bull ?? null;
+        p.rows.forecast = { sourceIdx: src._idx, sheetRow };
+      }
+      if (vals.actual != null) {
+        if (p.actual != null && p.rows.actual?.sourceIdx !== src._idx) p.actualOverridden = { was: p.actual, from: p.rows.actual };
+        p.actual = vals.actual;
+        p.rows.actual = { sourceIdx: src._idx, sheetRow };
+      }
+      if (!p.rows.forecast) p.rows.forecast = { sourceIdx: src._idx, sheetRow };
+      series.set(day, p);
+      checkRange(src, vals, kpi, day, sheetRow, vertical);
+    }
+    summary.vertical = [...summary.verticalsSeen].join(", ");
+    // Gaps only matter for files that carry forecasts, not for actuals-only overrides.
+    const hasForecasts = records.slice(1).some(c => (c[col.forecast] || "").trim());
+    if (hasForecasts) for (const [vk, m] of daysByKey) flagGaps(src, [...m.keys()], d => m.get(d), vk.split("|")[0]);
+  }
+
+  /* ---- Past days with no actual (after merging) ---- */
+  for (const v of verticals.values()) {
+    const byDay = new Map();   // day -> { kpis: [], row }
+    for (const kpi of baseKpis) {
+      for (const [day, p] of v.series.get(kpi) || []) {
+        if (day >= today || p.forecast == null || p.actual != null) continue;
+        if (!byDay.has(day)) byDay.set(day, { kpis: [], row: p.rows.forecast });
+        byDay.get(day).kpis.push(kpi);
+      }
+    }
+    for (const [day, { kpis, row }] of [...byDay].sort((a, b) => a[0] - b[0])) {
+      const src = sources.find(s => s._idx === row?.sourceIdx) || sources[0];
+      add({ severity: "warning", code: "kpi_missing_actual", src, day, sheetRow: row?.sheetRow ?? null, id: v.name,
+        message: `${v.name}: no actual for ${kpis.map(k => defs[k]?.label || k).join(" and ")} on ${fmtDayShort(day)} ${dayParts(day)[0]}.`, values: [v.name, ...kpis] });
+    }
+  }
+
+  return { verticals, defs, issues, summaries, today };
+}
+
+/* ---------- KPI calculations ---------- */
+
+const ratio = (a, b) => (a != null && b != null && b !== 0 ? a / b : null);
+
+// One day's forecast/bear/bull/actual for a KPI. Derived KPIs (AOV) are
+// recalculated from their parts; they have no bear/bull of their own.
+function kpiPoint(kpi, vertical, key, day) {
+  const def = kpi.defs[key];
+  const v = kpi.verticals.get(vertical);
+  if (!def || !v) return null;
+  if (def.derived) {
+    const [n, d] = def.derived;
+    const pn = kpiPoint(kpi, vertical, n, day), pd = kpiPoint(kpi, vertical, d, day);
+    if (!pn || !pd) return null;
+    return { forecast: ratio(pn.forecast, pd.forecast), bear: null, bull: null,
+      actual: pn.actual != null && pd.actual != null ? ratio(pn.actual, pd.actual) : null,
+      rows: pn.rows, derived: true };
+  }
+  return v.series.get(key)?.get(day) || null;
+}
+
+/**
+ * Status of an actual against its forecast.
+ *   scenarios: green >= forecast; amber < forecast but >= bear; red < bear; over = above bull
+ *   threshold: green >= forecast; amber up to t% below; red more than t% below; over = more than t% above
+ * Scenario mode needs bear and bull; without them the threshold is used.
+ * Returns { status: "over"|"green"|"amber"|"red"|"no_actual"|"none", delta, deltaPct, vsBear, vsBull, basis }.
+ */
+function kpiStatus(point, def, mode = "scenarios", thresholdPct = 5) {
+  if (!point || point.forecast == null) return { status: "none" };
+  const { forecast, bear, bull, actual } = point;
+  if (actual == null) return { status: "no_actual" };
+  const sign = def?.direction === "lower_is_better" ? -1 : 1;
+  const delta = actual - forecast;
+  const deltaPct = forecast ? delta / forecast : null;
+  const useScenarios = mode === "scenarios" && bear != null && bull != null;
+  let status, over;
+  if (useScenarios) {
+    over = sign * (actual - bull) > 0;
+    status = sign * (actual - forecast) >= 0 ? "green" : sign * (actual - bear) >= 0 ? "amber" : "red";
+  } else {
+    const t = thresholdPct / 100, rel = sign * (deltaPct ?? 0);
+    over = rel > t;
+    status = rel >= 0 ? "green" : rel >= -t ? "amber" : "red";
+  }
+  return { status: over ? "over" : status, delta, deltaPct, vsBear: ratio(actual, bear), vsBull: ratio(actual, bull), basis: useScenarios ? "scenarios" : "threshold" };
+}
+
+function kpiStatusMode(kpi, vertical, options) {
+  return kpi.verticals.get(vertical)?.statusMode || options?.mode || "scenarios";
+}
+
+/**
+ * Totals over a range of days, e.g. month-to-date or a week.
+ * Days without an actual are never counted as zero: actual, forecast, bear and
+ * bull are summed over the days that have an actual; the forecast for the
+ * other days is the "remaining" forecast used for the month-end projection.
+ *   projected = actual + remaining forecast × attainment
+ * Derived KPIs are recalculated from their summed parts.
+ */
+function kpiPeriod(kpi, vertical, key, fromDay, toDay) {
+  const def = kpi.defs[key];
+  if (!def || !kpi.verticals.get(vertical)) return null;
+  if (def.derived) {
+    const [n, d] = def.derived;
+    const a = kpiPeriod(kpi, vertical, n, fromDay, toDay), b = kpiPeriod(kpi, vertical, d, fromDay, toDay);
+    if (!a || !b) return null;
+    return {
+      derived: true, daysWithActual: a.daysWithActual, days: a.days,
+      actual: ratio(a.actual, b.actual), forecast: ratio(a.forecast, b.forecast), bear: null, bull: null,
+      forecastAll: ratio(a.forecastAll, b.forecastAll), projected: ratio(a.projected, b.projected),
+      attainment: ratio(ratio(a.actual, b.actual), ratio(a.forecast, b.forecast)), vsBear: null,
+      projectedAttainment: ratio(ratio(a.projected, b.projected), ratio(a.forecastAll, b.forecastAll)),
+    };
+  }
+  let A = 0, F = 0, B = 0, U = 0, R = 0, all = 0, n = 0, days = 0, bearOk = true, bullOk = true;
+  for (let day = fromDay; day <= toDay; day++) {
+    const p = kpiPoint(kpi, vertical, key, day);
+    if (!p || p.forecast == null) continue;
+    days++;
+    all += p.forecast;
+    if (p.actual != null) {
+      n++; A += p.actual; F += p.forecast;
+      if (p.bear == null) bearOk = false; else B += p.bear;
+      if (p.bull == null) bullOk = false; else U += p.bull;
+    } else R += p.forecast;
+  }
+  if (!days) return null;
+  const has = n > 0;
+  const attainment = has ? ratio(A, F) : null;
+  const projected = has ? A + R * attainment : null;
+  return {
+    daysWithActual: n, days,
+    actual: has ? A : null, forecast: has ? F : null,
+    bear: has && bearOk ? B : null, bull: has && bullOk ? U : null,
+    forecastAll: all, remainingForecast: R, attainment,
+    vsBear: has && bearOk ? ratio(A, B) : null,
+    projected, projectedAttainment: projected != null ? ratio(projected, all) : null,
+  };
+}
+
+// Latest day with any actual for a vertical.
+function kpiLatestActual(kpi, vertical) {
+  const v = kpi.verticals.get(vertical);
+  if (!v) return null;
+  let latest = null;
+  for (const series of v.series.values()) for (const [day, p] of series) if (p.actual != null && (latest === null || day > latest)) latest = day;
+  return latest;
+}
+
+/* ---------- Number formatting ---------- */
+
+function fmtNum(n, decimals = 0) {
+  if (n == null || Number.isNaN(n)) return "—";
+  return n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+function fmtPct(x, signed = false) {
+  if (x == null || Number.isNaN(x)) return "—";
+  const v = (x * 100).toFixed(1);
+  return `${signed && x > 0 ? "+" : ""}${v}%`;
+}
+// Value in a KPI's unit: QAR without decimals, counts with separators.
+function fmtKpi(value, def, signed = false) {
+  if (value == null || Number.isNaN(value)) return "—";
+  const s = `${signed && value > 0 ? "+" : ""}${fmtNum(Math.round(value))}`;
+  return def?.unit === "QAR" ? `QAR ${s}` : s;
+}
+// Short form for narrow cells: 104k, 10.1M, 97.
+function fmtCompact(value) {
+  if (value == null || Number.isNaN(value)) return "—";
+  const a = Math.abs(value);
+  if (a >= 1e6) return `${(value / 1e6).toFixed(a >= 1e7 ? 1 : 2)}M`;
+  if (a >= 1e4) return `${Math.round(value / 1e3)}k`;
+  if (a >= 1e3) return `${(value / 1e3).toFixed(1)}k`;
+  return fmtNum(value);
+}
+
+/* ---------- Everything together ---------- */
+
+// Read a source's CSV once and decide what it is. Config type wins; otherwise
+// the contents decide (engine title/header, long KPI header, else plan rows).
+function classifySource(src) {
+  if (src.loadError) return { ...src, _fileType: src.type === "kpi" ? "kpi_long" : "plan", _records: [] };
+  const { records, unterminated } = parseCSV(src.text || "");
+  let fileType = detectFileType(records);
+  if (src.type === "moments" || src.type === "campaigns") fileType = "plan";
+  else if (src.type === "kpi" && fileType === "plan") fileType = "kpi_unknown";
+  return { ...src, _records: records, _unterminated: unterminated, _fileType: fileType };
+}
+
+// Which KPI series a file feeds, so a fresh export can replace the old one
+// even when its file name differs. Returns null for non-engine files.
+function kpiIdentity(src) {
+  const c = classifySource(src);
+  return c._fileType === "kpi_engine" ? { vertical: engineVertical(src, c._records) || `layer-${engineLayer(c._records)}` } : null;
+}
+
 /**
  * Everything loaded, merged and checked.
- * sources: [{ label, text, origin, kind?, loadError? }] in load order.
- * Returns { rows, byKey, byId, issues, sources } where sources are per-file summaries.
+ * sources: [{ label, text, origin, type?, kind?, vertical?, statusMode?, loadError? }] in load order.
+ * options: { informationalAudiences, kpiDefinitions, kpiStatus, today }
+ * Returns { rows, byKey, byId, kpi, issues, sources } where sources are per-file summaries.
  */
 function buildDataset(sources, options = {}) {
-  const indexed = sources.map((s, i) => ({ ...s, _idx: i }));
-  const plan = buildPlan(indexed, options);
-  const summaries = plan.summaries;
-  const issues = plan.issues;
+  const indexed = sources.map((s, i) => classifySource({ ...s, _idx: i }));
+  const planSources = indexed.filter(s => s._fileType === "plan");
+  const kpiSources = indexed.filter(s => s._fileType === "kpi_engine" || s._fileType === "kpi_long");
+  const plan = buildPlan(planSources, options);
+  const kpi = buildKpi(kpiSources, options);
+  const summaries = [...plan.summaries, ...kpi.summaries];
+  const issues = [...plan.issues, ...kpi.issues];
+  for (const s of indexed.filter(s => s._fileType === "kpi_unknown")) {
+    summaries.push({ label: s.label, origin: s.origin, sourceIdx: s._idx, kind: "kpi_unknown", rowCount: 0, blankRows: 0 });
+    issues.push(makeIssue({ severity: "error", code: "kpi_not_kpi_file", src: s, sheetRow: 1,
+      message: "Configured as a KPI source, but it's neither a forecasting engine export (title row + Date/Day/Bear header) nor a long-format file (date, vertical, kpi, forecast, actual)." }));
+  }
   for (const s of summaries) { s.errors = 0; s.warnings = 0; }
   for (const i of issues) {
     const s = summaries.find(x => x.sourceIdx === i.sourceIdx);
@@ -944,7 +1389,7 @@ function buildDataset(sources, options = {}) {
   // File-level first, then by source order and row
   issues.sort((a, b) => (a.sourceIdx - b.sourceIdx) || ((a.sheetRow ?? 0) - (b.sheetRow ?? 0)) || (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1));
   summaries.sort((a, b) => a.sourceIdx - b.sourceIdx);
-  return { rows: plan.rows, byKey: plan.byKey, byId: plan.byId, issues, sources: summaries };
+  return { rows: plan.rows, byKey: plan.byKey, byId: plan.byId, kpi, issues, sources: summaries };
 }
 
 /* CORE:END */
@@ -1005,7 +1450,10 @@ async function addFiles(fileList) {
     err => ({ label: f.name, text: "", origin: "file", loadError: String(err) }),
   )));
   // A file with the same name replaces the earlier one, so re-dropping an updated export just works.
+  // A KPI engine export also replaces the previous export for the same vertical, whatever its name.
   for (const s of loaded) {
+    const id = s.loadError ? null : kpiIdentity(withConfig(s));
+    if (id) state.sources = state.sources.filter(x => x.label === s.label || x.origin !== "file" || kpiIdentity(withConfig(x))?.vertical !== id.vertical);
     const i = state.sources.findIndex(x => x.label === s.label);
     if (i >= 0) state.sources[i] = s; else state.sources.push(s);
   }
@@ -1015,7 +1463,7 @@ async function addFiles(fileList) {
 
 async function loadUrls() {
   const fetched = await Promise.all(CONFIG.sources.filter(s => s.url).map(async s => {
-    const base = { label: s.label || s.url, origin: "url", kind: s.type === "moments" ? "moments" : s.type === "campaigns" ? "vertical" : s.kind };
+    const base = { label: s.label || s.url, origin: "url", url: s.url };
     try {
       const res = await fetch(s.url, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1037,8 +1485,38 @@ function clearData() {
   rebuild();
 }
 
+/* ---------- Config matching ---------- */
+
+// "*L1*Total*.csv" -> regex; case-insensitive, * = anything.
+function globToRegex(glob) {
+  return new RegExp(`^${glob.split("*").map(p => p.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "i");
+}
+// The config entry for a loaded source: URL sources by url, files by their `file` pattern.
+function configFor(src) {
+  if (src.origin === "url") return CONFIG.sources.find(c => c.url && c.url === src.url) || null;
+  return CONFIG.sources.find(c => c.file && globToRegex(c.file).test(src.label)) || null;
+}
+// Source as handed to the core: config fields (type, vertical, statusMode) filled in.
+function withConfig(src) {
+  const c = configFor(src);
+  if (!c) return src;
+  return {
+    ...src,
+    type: c.type,
+    kind: c.type === "moments" ? "moments" : c.type === "campaigns" ? "vertical" : src.kind,
+    vertical: c.vertical ?? src.vertical,
+    statusMode: c.statusMode ?? src.statusMode,
+  };
+}
+const coreOptions = () => ({
+  informationalAudiences: CONFIG.informationalAudiences,
+  kpiDefinitions: CONFIG.kpiDefinitions,
+  kpiStatus: CONFIG.kpiStatus,
+  today: todayDay(),
+});
+
 function rebuild() {
-  state.data = buildDataset(state.sources, { informationalAudiences: CONFIG.informationalAudiences });
+  state.data = buildDataset(state.sources.map(withConfig), coreOptions());
   render();
 }
 
@@ -1278,20 +1756,26 @@ function countChip(n, sev) {
   return `<span class="count ${n ? sev : "zero"}" title="${n} ${sev}${n === 1 ? "" : "s"}">${n}</span>`;
 }
 
+const KIND_LABELS = { moments: "Seasonal moments", vertical: "Campaigns", kpi_engine: "KPI forecast (engine)", kpi_long: "KPI (long format)", kpi_unknown: "KPI (unreadable)" };
+
 function renderSources() {
-  const { sources, rows } = state.data;
-  $("#sourcesSummary").textContent = `${sources.length} file${sources.length === 1 ? "" : "s"}, ${rows.length} initiatives`;
+  const { sources, rows, kpi } = state.data;
+  const kpiNames = [...kpi.verticals.keys()];
+  $("#sourcesSummary").textContent = `${sources.length} file${sources.length === 1 ? "" : "s"}, ${rows.length} initiatives${kpiNames.length ? `, KPIs for ${kpiNames.join(", ")}` : ""}`;
   $("#sourcesBody").innerHTML = `
     <table class="grid">
       <thead><tr><th>Source</th><th>Type</th><th class="num">Rows</th><th>Errors</th><th>Warnings</th><th>Notes</th></tr></thead>
       <tbody>${sources.map(s => `
         <tr>
           <td><strong>${esc(s.label)}</strong> <span class="faint">${s.origin === "url" ? "· sheet URL" : "· local file"}</span></td>
-          <td>${s.loadError ? "" : `<span class="kind-tag">${s.kind === "moments" ? "Seasonal moments" : "Vertical"}${s.kindInferred ? "" : " (set in config)"}</span>`}</td>
-          <td class="num">${s.rowCount}</td>
+          <td>${s.loadError ? "" : `<span class="kind-tag">${KIND_LABELS[s.kind] || s.kind}${s.vertical ? ` · ${esc(s.vertical)}` : ""}</span>`}</td>
+          <td class="num">${s.rowCount}${s.kind === "kpi_engine" ? " days" : ""}</td>
           <td>${countChip(s.errors, "error")}</td>
           <td>${countChip(s.warnings, "warning")}</td>
           <td class="muted">${s.loadError ? `<span class="load-error">${esc(s.loadError)}</span>` : [
+            s.ignored ? `<span class="load-error">Ignored: another file for ${esc(s.vertical)} is loaded</span>` : "",
+            s.firstDay != null ? `${s.kind === "kpi_long" ? "" : "days "}${fmtDay(s.firstDay)} – ${fmtDay(s.lastDay)}` : "",
+            s.kind === "kpi_engine" && !s.ignored && kpiLatestActual(kpi, s.vertical) != null ? `actuals through ${fmtDayShort(kpiLatestActual(kpi, s.vertical))}` : "",
             s.blankRows ? `${s.blankRows} blank row${s.blankRows === 1 ? "" : "s"} skipped` : "",
             s.missingOptional?.length ? `<span title="${esc(s.missingOptional.join(", "))}">${s.missingOptional.length} optional column${s.missingOptional.length === 1 ? "" : "s"} not in file (read as blank)</span>` : "",
           ].filter(Boolean).join(" · ")}</td>

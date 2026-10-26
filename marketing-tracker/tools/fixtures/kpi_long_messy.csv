@@ -1,0 +1,6 @@
+date,vertical,kpi,forecast,forecast_bear,forecast_bull,actual
+2026-10-25,Total,orders,,,,"99,000"
+2026-10-20,Groceries,orders,10000,9300,11000,9800
+2026-10-20,Grocery,sessions,50000,,,51000
+2026-10-20,Grocery,aov_qar,100,,,98
+2026-10-21,Grocery,orders,10000,9300,11000,lots
