@@ -3,10 +3,10 @@
 One page that shows all marketing activity by month and by week, across three tiers:
 **Seasonal Moments → Brand Campaigns → Tactical Campaigns**. Next to the plan, it shows daily **orders, GMV and AOV** against forecast, so a bad day sits right beside what was running. It doubles as the current-state marketing plan.
 
-- **Source of truth:** Google Sheets.
-  - One sheet per vertical holds its brand and tactical campaigns.
-  - One shared **Seasonal Moments** sheet is owned centrally.
-  - The **daily KPI forecast** is exported as-is from the forecasting engine.
+- **Source of truth:** one Google spreadsheet, with one tab per source:
+  - **Seasonal Moments:** shared, owned centrally.
+  - **One tab per vertical:** S Market, Restaurants, Snoomart, Grocery, S Laundry, Services, New Ventures. Each holds that vertical's brand and tactical campaigns.
+  - **KPI Forecast:** the forecasting engine's daily forecast and actuals, as-is.
 - **Visual layer:** `index.html`. It's a single file with no install, no build step and no server.
 - **Read-only:** all editing happens in Google Sheets. The tracker links you to the right row.
 
@@ -24,40 +24,39 @@ marketing-tracker/
 ## 1. Open the tracker
 
 1. Double-click `index.html`. It opens in your browser (Chrome, Edge, Safari or Firefox).
-2. Drag the files onto the page, or click **Add or replace files** and pick several at once:
-   - the Seasonal Moments CSV
-   - every vertical's CSV
-   - the KPI forecast export
-3. That's it. The browser remembers the files until you click **Clear data**.
+2. It loads every tab straight from Google Sheets. "Loaded sources" lists each tab with its row count and issues.
+3. After editing a sheet, click **Reload data** (section 7).
 
-**Updating files**
-- **A file with the same name** replaces the old one.
-- **A new engine export** replaces the previous one for the same vertical, even if its file name differs (e.g. `… (1).csv`).
-- **Reload data** re-reads everything and keeps your current view, month or week, and filters. See section 7.
+**If Google Sheets can't be reached** (offline, or a network that blocks `docs.google.com`), the page says so and offers a drop zone instead.
+- Download the tabs as CSV (**File → Download → Comma-separated values**, one tab at a time) and drop them on the page.
+- Google names each download `<spreadsheet> - <tab>.csv`. The tracker matches that tab name to the config, so edit links still work.
+- Dropping files works any time: a file replaces the tab it matches, and a new engine export replaces the previous one even if its name differs.
+- Dropped files stay on your computer. Nothing is uploaded.
 
-Your files stay on your computer. Nothing is uploaded.
-
-> Try it now: drop the files from `sample-data/` onto the page.
+> Offline demo: set `mode: "local"` in CONFIG and drop the files from `sample-data/` onto the page.
 
 ---
 
-## 2. Set up a sheet (one time)
+## 2. Set up a tab (one time)
 
-### A vertical's sheet
+All tabs live in one spreadsheet. Its whole document is published to the web (section 6).
 
-1. In Google Drive: **New → Google Sheets**, then name it e.g. `Marketing Plan – S Market`.
-2. **File → Import → Upload**, choose `tracker_template.xlsx`, then pick **Replace spreadsheet**.
+### A vertical's tab
+
+1. Import `tracker_template.xlsx` into a scratch spreadsheet (**File → Import → Upload → Replace spreadsheet**). Then copy its **Initiatives** tab into the main spreadsheet: right-click the tab → **Copy to** → the main spreadsheet.
+2. Rename the copied tab after the vertical (e.g. `Snoomart`).
+3. If the dropdowns point at the scratch file's **Lists** tab, copy **Lists** across too and re-point them under **Data → Data validation**.
 3. Check that the **Initiatives** tab has dropdowns in `tier`, `vertical`, `campaign_type`, `status`, `priority` and `date_confidence`, and that the **Lists** tab exists.
 4. Recommended: **Data → Protect sheets and ranges** to protect the **Lists** tab and the header row.
 
-### The shared Seasonal Moments sheet (central team only)
+### The shared Seasonal Moments tab (central team only)
 
 Do the same with `seasonal_moments_template.xlsx`.
 - `tier` and `vertical` are pre-filled (Seasonal Moment / Cross-vertical), and their dropdowns allow only that value.
 - Google Sheets doesn't keep locked cells from an imported file. To stop edits, protect columns C and E with **Data → Protect sheets and ranges**.
 - Rows with nothing but those two pre-filled values are ignored. Loaded sources counts them as "blank rows skipped".
 
-Existing sheets don't need re-importing. Any column a sheet doesn't have is read as blank. Only `id`, `name`, `tier`, `start_date` and `end_date` are required.
+Existing tabs don't need re-importing. Any column a sheet doesn't have is read as blank. Only `id`, `name`, `tier`, `start_date` and `end_date` are required.
 
 ---
 
@@ -71,13 +70,13 @@ One row = one initiative. Don't rename columns. Their order doesn't matter, beca
 | `name` | Short, readable name. This is what appears on the bar |
 | `tier` | Brand Campaign / Tactical Campaign. Seasonal Moment is only for the shared sheet |
 | `parent_id` | The `id` of the parent, which may live in another sheet. **Brand:** optional, link to a seasonal moment. **Tactical:** a brand campaign or a seasonal moment. **Moments:** leave empty |
-| `vertical` | Dropdown. Moments are always `Cross-vertical` |
+| `vertical` | Dropdown. Moments are always `Cross-vertical`. On a vertical's tab, a blank vertical means that tab's vertical; a different vertical is flagged as a warning |
 | `relevant_verticals` | **Moments only.** Verticals the moment matters to, separated by semicolons (`Restaurants;Grocery`), or `All`. Blank means All. `Brand` and `City` are accepted as audiences (they don't match a campaign vertical); see `informationalAudiences` in the config |
 | `sub_vertical` | Optional free text |
 | `campaign_type` | **Campaigns:** Hero, Promo, Tactical, Occasion, Recurrent, USP, Segmented, Engagement, Adoption, Habit Builder (required). **Moments:** MarCom's moment type, any text (e.g. National occasion, International day) |
 | `priority` | **Campaigns:** P0–P3. **Moments:** MarCom tier T1–T3. Optional |
 | `date_confidence` | Confirmed / Fixed date / Tentative / Tentative (lunar) / School-specific / Planning window. Anything but Confirmed or Fixed date shows as **date tentative** |
-| `start_date`, `end_date` | `YYYY-MM-DD`. A one-day activity has the same start and end |
+| `start_date`, `end_date` | `YYYY-MM-DD`. A one-day activity has the same start and end. `D/M/YYYY` (day first, e.g. `5/11/2026` = 5 Nov) is accepted but flagged as a warning |
 | `status` | Idea / Planning / Live / Complete / Paused |
 | `owner` | Person or team |
 | `channels` | Separated by semicolons: `WhatsApp;Paid Ads;CRM` |
@@ -122,32 +121,33 @@ One row = one initiative. Don't rename columns. Their order doesn't matter, beca
 
 ### The forecasting engine export (read as-is)
 
-Export the engine's sheet as CSV and drop it on the page, or publish it (section 6). **Don't reformat it.** The tracker reads the native layout:
+The **KPI Forecast** tab (`type: "kpi_engine"`) is read in the engine's native layout. **Don't reformat it**:
 
 | Position | Header | How it's used |
 |---|---|---|
-| Row 1 | Title, e.g. `LAYER 1 — Orders & GMV \| 180-Day Tracking` | Identifies the file and its layer. Otherwise skipped |
-| Row 2 | Headers (contain line breaks; `Err%` repeats) | Skipped. Columns are read **by position** |
-| Col 1 | Date | `DD-Mmm-YY`, e.g. `14-May-26` |
+| Row 1 | Title, e.g. `LAYER 1 — Orders & GMV \| 180-Day Tracking` | Names the layer. Otherwise skipped |
+| Row 2 | Headers (contain line breaks; `Err%` repeats) | Must start with `Date` (checked). Columns are read **by position** |
+| Col 1 | Date | `DD-Mmm-YY`, e.g. `14-May-26`. `D/M/YYYY` is accepted with a warning |
 | Col 2 | Day | **Ignored.** The weekday comes from the date |
 | Col 3–6 | Ord Bear −7% / Forecast / Bull +10% / Actual | Orders. A blank actual means no actual yet |
 | Col 7–9 | Ord Err% ×3 | **Ignored.** Recalculated |
 | Col 10–13 | GMV Bear −7% / Forecast / Bull +10% / Actual | GMV in QAR |
 | Col 14–16 | GMV Err% ×3 | **Ignored** |
 
-- **Number formats:** values like `"101,623"` and `"10,077,762.51"` are fine.
+- **Number formats:** values like `"101,623"`, `"10,077,762.51"` and percentages such as `"102.9%"` are fine.
+- **Blank rows** below the data (pre-formatted empty rows) are skipped, on every tab.
 - **Date range:** any range works. Nothing depends on the "180 days" in the file name.
-- **Recognising the file:** by its title row or header, not its name.
+- **Recognising a dropped file:** by its title row or header, not its name.
 
-**Dropping in a new export:** whenever actuals are updated, export again and drop the new file on the page, or click **Reload data** if it's published. It replaces the previous export for the same vertical.
+**New actuals:** paste the engine's new export into the KPI Forecast tab, then click **Reload data**. A downloaded export dropped on the page also works, and replaces the previous one.
 
 **Layers and verticals**
-- **Layer 1** is the company total and is stored as vertical `Total`.
-- **Other layers:** a future Layer 2 file in the same layout (e.g. Grocery) needs a config entry naming its vertical:
+- **Layer 1** (or a title without a layer) is the company total, stored as vertical `Total`.
+- **Other layers:** a future Layer 2 tab in the same layout (e.g. Grocery) gets its own entry, with its vertical:
   ```js
-  { label: "KPI – Grocery", type: "kpi", vertical: "Grocery", file: "*L2*Grocery*.csv" }
+  { label: "KPI Grocery", type: "kpi_engine", sheetUrl: "https://docs.google.com/spreadsheets/d/…/edit?gid=…", vertical: "Grocery" }
   ```
-  Without one, the file shows as "Unassigned" with a warning.
+  Without `vertical`, a Layer 2+ tab shows as "Unassigned" with a warning.
 
 ### Long format (for teams that send their own forecasts)
 
@@ -157,7 +157,8 @@ date,vertical,kpi,forecast,forecast_bear,forecast_bull,actual
 2026-10-18,Grocery,gmv_qar,1480000,,,1502300
 ```
 
-- **Dates:** `YYYY-MM-DD` (or `DD-Mmm-YY`).
+- **Type:** use `type: "kpi"` for a long-format tab.
+- **Dates:** `YYYY-MM-DD` (or `DD-Mmm-YY`; `D/M/YYYY` with a warning).
 - **KPI names:** must match `kpiDefinitions`. AOV is always calculated, so don't send it.
 - **Bear and bull** are optional. Without them, status uses the threshold rule (below).
 - **Actuals** in a long-format file **override** the engine's actual for the same date, vertical and KPI. That's how you send corrected or more recent actuals.
@@ -191,54 +192,67 @@ In the CONFIG block (`kpiDefinitions`). Add more KPIs here later:
 
 ---
 
-## 6. Get the sheets into the tracker
+## 6. Connect the tracker to the spreadsheet (CONFIG)
 
-There are two ways. Pick one for the whole team.
+### Publish the spreadsheet (one time)
 
-### Option A: Download CSVs (the default, nothing to configure)
+**File → Share → Publish to web → Link → Entire document → Comma-separated values (.csv) → Publish.** Copy the link. It looks like:
 
-1. Open the sheet on the right tab (**Initiatives**, or the engine's tab). Only the active tab downloads.
-2. **File → Download → Comma-separated values (.csv)**.
-3. Drop the file on the tracker.
+```
+https://docs.google.com/spreadsheets/d/e/2PACX-1vTBY…H4k/pub?output=csv
+```
 
-### Option B: Publish to web (live, no downloading)
-
-1. In each sheet: **File → Share → Publish to web**. Under **Link**, choose the tab and **Comma-separated values (.csv)**, click **Publish**, and copy the URL.
-2. In `index.html`, set `mode: "urls"` in CONFIG and add each URL to `sources`.
+The `2PACX-…` part is the **publishedId**.
 
 Things to know about publishing:
-- **Anyone with a published link can read that tab.** Check this is acceptable, and that your Workspace admin allows publishing.
-- Google can take about 5 minutes to reflect edits in the published CSV.
-- If a source shows "Could not load", open its URL in the browser. It should download or show raw CSV, not a sign-in page.
-- Some browsers block a page opened as a file from fetching data. If so, host `index.html` on an internal site, or run `python3 -m http.server` in this folder and open http://localhost:8000.
-
-  URL mode was tested against a local web server, not a live published Google Sheet. Do one test run before relying on it.
+- **Anyone with the published link can read every tab.** Check this is acceptable for plan and KPI data, and that your Workspace admin allows publishing.
+- **Google can take about 5 minutes** to reflect edits in the published CSV.
+- **Publish the entire document**, not a single tab. Otherwise the other tabs' links don't work.
 
 ### The CONFIG block
 
-Every field except `label` is optional:
+At the top of `index.html`. Each tab needs only its **label**, **type** and **sheetUrl** (the tab's normal link from the address bar, with that tab open):
 
 ```js
-sources: [
-  { label: "Seasonal Moments", type: "moments", file: "seasonal_moments*.csv",
-    url: "https://docs.google.com/spreadsheets/d/e/…/pub?gid=0&single=true&output=csv",
-    editUrl: "https://docs.google.com/spreadsheets/d/1AbC…/edit", gid: 0 },
-  { label: "S Market", type: "campaigns", file: "s_market*.csv",
-    editUrl: "https://docs.google.com/spreadsheets/d/1XyZ…/edit", gid: 0 },
-  { label: "KPI forecast – Total App", type: "kpi", vertical: "Total", file: "*L1*Total*.csv",
-    editUrl: "https://docs.google.com/spreadsheets/d/1Kp…/edit", gid: 123456789 },
-],
+const CONFIG = {
+  mode: "urls",
+  publishedId: "2PACX-1vTBY2uU0M5EwJeEiWFK2y06GTMz881OKAonyKdnk3oT0qR7JbU07h4BoKEuLzHIMpn4KkrTH4e3eH4k",
+  sources: [
+    { label: "Seasonal Moments", type: "moments",    sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZ…JYlrYmJI/edit?gid=680008376#gid=680008376" },
+    { label: "S Market",         type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZ…JYlrYmJI/edit?gid=1579014905#gid=1579014905" },
+    …
+    { label: "KPI Forecast",     type: "kpi_engine", sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZ…JYlrYmJI/edit?gid=1008622602#gid=1008622602" },
+  ],
+  …
+};
 ```
 
 | Field | Meaning |
 |---|---|
-| `type` | `moments`, `campaigns` or `kpi`. Leave it out to let the contents decide |
-| `url` | Published CSV link (URL mode) |
-| `file` | Local mode: the file-name pattern that identifies this sheet's export. `*` matches anything. This is how a dropped file finds its `editUrl` and, for KPIs, its `vertical` |
-| `editUrl`, `gid` | Turn on the **Edit in sheet** buttons and the **Open sheets** menu |
-| `vertical`, `statusMode` | KPI sources only (section 5) |
+| `label` | The tab's name. For a campaign tab it's also the vertical (`S Laundry` = `SLaundry`; spaces and case don't matter) |
+| `type` | `moments` (Seasonal Moments), `campaigns` (a vertical's tab), `kpi_engine` (the engine's KPI tab), or `kpi` (a long-format KPI tab) |
+| `sheetUrl` | `https://docs.google.com/spreadsheets/d/<SHEET_ID>/edit?gid=<GID>#gid=<GID>` |
 
----
+**What the tracker works out from those:**
+
+| Derived | How |
+|---|---|
+| Published CSV link | `https://docs.google.com/spreadsheets/d/e/<publishedId>/pub?gid=<GID>&single=true&output=csv` |
+| Edit link | `https://docs.google.com/spreadsheets/d/<SHEET_ID>/edit#gid=<GID>&range=A<row>` |
+| Campaign tab vertical | From the label |
+| KPI vertical | `Total` for Layer 1 |
+
+**Optional overrides:** `vertical` (KPI tabs beyond Layer 1) and `statusMode` (`"threshold"`). Rarely needed: `url`, `editUrl`, `gid`, or a `file` pattern for dropped files.
+
+**`mode`:**
+- `"urls"` (the default): load every tab from Google Sheets on open.
+- `"local"`: start with the drop zone instead.
+
+Either way, dropping CSV files on the page works.
+
+**Opening the page from disk:** this usually works, because Google normally lets any page read published CSVs. If your browser refuses (the tracker then says it couldn't reach Google Sheets, while the published link opens fine on its own), host `index.html` on an internal site, or run `python3 -m http.server` in this folder and open http://localhost:8000.
+
+**Check the live connection from a terminal:** `node tools/check.mjs --live` fetches all the tabs and prints the same Loaded sources summary and data issues.
 
 ## 7. Edit in the sheet, then click Reload data
 
@@ -253,35 +267,34 @@ The tracker never changes your data. To fix or update something:
 3. Come back and click **Reload data**. Your view, month or week, filters and open panel stay put.
 
 **How Reload data gets the new data**
-- **URL mode:** it fetches every published sheet again (allow about 5 minutes for Google to republish).
+- **From Google Sheets** (the default): it fetches every tab again. Allow about 5 minutes for Google to republish.
 - **Local files:** download the new CSV and drop it on the page, which replaces the old one. In **Chrome and Edge**, files you picked with **Add or replace files** or dropped on the page are remembered, so **Reload data** re-reads them from disk in one click (the browser may ask permission once). Other browsers say which files to choose again.
 
   Re-reading remembered files couldn't be tested here, because the headless test browser can't use the real file picker. Check it once in Chrome or Edge.
 
-**Finding `editUrl` and `gid`:** open the sheet and click the right tab. The address bar shows
-`https://docs.google.com/spreadsheets/d/<sheet id>/edit#gid=<number>`.
-- **`editUrl`:** everything up to and including `/edit`. Anything after `/edit` is ignored anyway.
-- **`gid`:** the number after `#gid=`. The first tab is usually `0`.
+**Edit links come from each tab's `sheetUrl`** (section 6). Dropped files get them too, when their name contains the tab's label.
 
-**When the button is greyed out:** that source has no `editUrl` in the config. Hover the button for the reminder.
+**When the button is greyed out:** the source isn't in the config, or a dropped file's name doesn't contain a tab label. Hover the button for the reminder.
 
 If someone sorts or inserts rows after an export, row links point to the old positions until the next reload.
 
 ---
 
-## 8. Add a new vertical
+## 8. Add a tab or a vertical
 
 **One of the eight verticals above:**
-1. Create its sheet from `tracker_template.xlsx`.
-2. Add a `sources` entry in the config (`label`, `type: "campaigns"`, `file` and/or `url`, `editUrl`, `gid`).
-3. Share or publish its CSV.
+1. Add its tab to the spreadsheet (section 2).
+2. Open the tab and copy the address-bar link.
+3. Add `{ label: "<tab name>", type: "campaigns", sheetUrl: "<link>" }` to `sources`.
 
-**If it gets its own KPI layer:** add a `type: "kpi"` entry with its `vertical`.
+The published document picks up the new tab automatically.
 
-**A brand-new vertical:** a maintainer needs to:
+**A KPI layer for a vertical:** add `{ label: "KPI <vertical>", type: "kpi_engine", sheetUrl: "<link>", vertical: "<vertical>" }`.
+
+**A brand-new vertical:** a maintainer also needs to:
 1. In `index.html`, add it to `ALLOWED.vertical`, `VERTICAL_CODES`, and a colour (`--v-xxx` in `:root` plus `VERTICAL_VAR`).
 2. In `tools/build_templates.py`, add it to `VERTICALS` and run `python3 tools/build_templates.py`.
-3. In every existing sheet, add the name to the **Lists** tab's `vertical` column.
+3. Add the name to the **Lists** tab's `vertical` column.
 
 ---
 
@@ -395,6 +408,6 @@ If the colours come out blank, tick **Background graphics** in the print dialog'
   - There are no external libraries.
 - **`node tools/check.mjs`** runs that same logic in Node, using the page's CONFIG.
   - It prints loaded sources, data issues and a KPI month summary.
-  - Options: `--month=2026-10`, `--today=2026-10-26`, `--rows` (print every plan row) and `--test` (parser, date and KPI status self-tests).
+  - Options: `--live` (fetch every tab in CONFIG from Google Sheets), `--month=2026-10`, `--today=2026-10-26`, `--rows` (print every plan row) and `--test` (parser, date, KPI status and config self-tests).
   - `tools/fixtures/` holds deliberately broken files that trigger every validation rule, including the KPI checks.
 - **`python3 tools/build_templates.py`** regenerates both `.xlsx` templates. It needs `openpyxl`. Its allowed values must match `ALLOWED` in `index.html`.

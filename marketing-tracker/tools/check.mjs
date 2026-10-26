@@ -4,6 +4,7 @@
 //   node tools/check.mjs                       # the files in sample-data/
 //   node tools/check.mjs a.csv b.csv ...       # any CSV files
 //   node tools/check.mjs --test                # parser, date and KPI self-tests only
+//   node tools/check.mjs --live                # fetch every tab in CONFIG from Google Sheets
 // Options:
 //   --month=2026-10        KPI month summary for that month (default: this month)
 //   --today=2026-10-26     pretend today is this date (affects "past day with no actual")
@@ -21,7 +22,7 @@ const cfg = /<script>\s*(\/\*[\s\S]*?CONFIG[\s\S]*?)<\/script>/.exec(html);
 if (!cfg) throw new Error("CONFIG block not found in index.html");
 const CONFIG = new Function(`${cfg[1]}; return CONFIG;`)();
 const core = new Function(`${m[1]}; return { parseCSV, buildDataset, weekStart, dayToISO, parseISODate, parseDMYDate,
-  parseNumber, kpiStatus, kpiPeriod, kpiPoint, kpiLatestActual, monthBounds, todayDay, fmtDay, fmtDayShort, fmtNum, fmtPct, fmtKpi, ISSUE_TYPES };`)();
+  parseNumber, parseSlashDate, resolveConfigSource, applySourceConfig, kpiStatus, kpiPeriod, kpiPoint, kpiLatestActual, monthBounds, todayDay, fmtDay, fmtDayShort, fmtNum, fmtPct, fmtKpi, ISSUE_TYPES };`)();
 const args = process.argv.slice(2);
 const flag = name => args.find(a => a.startsWith(`--${name}=`))?.split("=")[1];
 const today = flag("today") ? core.parseISODate(flag("today")) : core.todayDay();
@@ -60,6 +61,14 @@ function parserTests() {
   eq("number with separators", core.parseNumber('"10,077,762.51"'), 10077762.51);
   eq("blank number", core.parseNumber(""), null);
   eq("bad number", Number.isNaN(core.parseNumber("12a")), true);
+  eq("percentage", core.parseNumber('"102.9%"'), 1.029);
+  eq("D/M/YYYY", core.dayToISO(core.parseSlashDate("5/11/2026")), "2026-11-05");
+  eq("D/M/YYYY invalid", core.parseSlashDate("31/2/2026"), null);
+  const r = core.resolveConfigSource({ label: "S Laundry", type: "campaigns", sheetUrl: "https://docs.google.com/spreadsheets/d/ABC_1-x/edit?gid=736725729#gid=736725729" }, "2PACX-xyz");
+  eq("resolve url", r.url, "https://docs.google.com/spreadsheets/d/e/2PACX-xyz/pub?gid=736725729&single=true&output=csv");
+  eq("resolve editUrl", r.editUrl, "https://docs.google.com/spreadsheets/d/ABC_1-x/edit");
+  eq("resolve gid", r.gid, "736725729");
+  eq("resolve tab vertical", r.tabVertical, "SLaundry");
   // Status rules
   const def = { direction: "higher_is_better" };
   const st = (actual, mode = "scenarios") => core.kpiStatus({ forecast: 100, bear: 93, bull: 110, actual }, def, mode, 5).status;
@@ -72,7 +81,7 @@ function parserTests() {
   eq("threshold red -5.1%", st(94.9, "threshold"), "red");
   eq("threshold over +5.1%", st(105.1, "threshold"), "over");
   eq("no actual", core.kpiStatus({ forecast: 100, bear: 93, bull: 110, actual: null }, def).status, "no_actual");
-  const extra = 3 + 3 + 9 + 4;
+  const extra = 3 + 3 + 9 + 4 + 8;
   console.log(fails ? `Self-tests: ${fails} FAILED` : `Self-tests: all ${cases.length + extra} passed`);
   return fails;
 }
@@ -91,8 +100,19 @@ const fails = parserTests();
 if (args.includes("--test")) process.exit(fails ? 1 : 0);
 
 const fileArgs = args.filter(a => !a.startsWith("--"));
+const resolved = CONFIG.sources.map(c => core.resolveConfigSource(c, CONFIG.publishedId));
 const files = fileArgs.length ? fileArgs : readdirSync(join(root, "sample-data")).filter(f => f.endsWith(".csv")).sort().reverse().map(f => join(root, "sample-data", f));
-const sources = files.map(f => ({ label: basename(f), text: readFileSync(f, "utf8"), origin: "file" }));
+let sources = files.map(f => core.applySourceConfig({ label: basename(f), text: readFileSync(f, "utf8"), origin: "file" }, resolved));
+if (args.includes("--live")) {
+  sources = await Promise.all(resolved.filter(c => c.url).map(async c => {
+    const base = { label: c.label, origin: "url", url: c.url };
+    try {
+      const res = await fetch(c.url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return core.applySourceConfig({ ...base, text: await res.text() }, resolved);
+    } catch (e) { return { ...base, text: "", loadError: e.cause?.message || e.message }; }
+  }));
+}
 const data = core.buildDataset(sources, options);
 
 console.log(`\nToday: ${core.fmtDay(today)}`);

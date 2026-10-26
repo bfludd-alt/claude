@@ -8,36 +8,38 @@
 /* ============================================================
    CONFIG — edit this block to point the tracker at your data.
    ============================================================
-   mode: "local" — drag CSV files onto the page or pick them with the file
-                   picker. The browser remembers them until "Clear data".
-         "urls"  — fetch every source that has a `url` on load. Use the CSV
-                   link from Google Sheets: File > Share > Publish to web >
-                   (pick the tab) > Comma-separated values.
+   publishedId  The id in the "Publish to web" link of the whole spreadsheet:
+                https://docs.google.com/spreadsheets/d/e/<publishedId>/pub?output=csv
+                (File > Share > Publish to web > Entire document > CSV)
 
-   sources: one entry per sheet. Every field is optional except label.
-     label     Name shown in the tracker.
-     type      "moments", "campaigns" or "kpi". Leave out to let the
-               tracker work it out from the file's contents.
-     url       Published CSV link (used when mode is "urls").
-     file      Local mode: file name pattern that identifies this sheet's
-               export, * = anything. e.g. "*L1*Total*.csv"
-     editUrl   The sheet's normal link, ending in /edit. Enables the
-               "Edit in sheet" buttons.
-     gid       The tab's id: the number after #gid= in the address bar
-               when the tab is open.
-     vertical  KPI sources only: whose numbers these are ("Total",
-               "Grocery", ...). A Layer 1 engine file defaults to "Total".
-     statusMode KPI sources only: "scenarios" (default; uses the bear and
-               bull columns) or "threshold" (uses kpiStatus.thresholdPct).
+   sources      One entry per tab: { label, type, sheetUrl }
+     label      The tab's name. For campaign tabs it's also the vertical.
+     type       "moments"     the shared Seasonal Moments tab
+                "campaigns"   a vertical's brand and tactical campaigns
+                "kpi_engine"  the forecasting engine's KPI tab (title row 1, header row 2)
+     sheetUrl   The tab's normal link, copied from the address bar with the tab open:
+                https://docs.google.com/spreadsheets/d/<sheet id>/edit?gid=<tab id>#gid=<tab id>
+
+   Everything else is worked out from these: each tab's published CSV link,
+   the "Edit in sheet" links, and the vertical of each campaign tab.
+
+   mode         "urls"  (default) load every tab from Google Sheets on open.
+                "local" start empty and load dropped CSV files instead.
+                Dropping CSV files on the page works in both modes.
 */
 const CONFIG = {
-  mode: "local",
+  mode: "urls",
+  publishedId: "2PACX-1vTBY2uU0M5EwJeEiWFK2y06GTMz881OKAonyKdnk3oT0qR7JbU07h4BoKEuLzHIMpn4KkrTH4e3eH4k",
   sources: [
-    // { label: "Seasonal Moments", type: "moments", file: "seasonal_moments*.csv",
-    //   url: "https://docs.google.com/spreadsheets/d/e/.../pub?gid=0&single=true&output=csv",
-    //   editUrl: "https://docs.google.com/spreadsheets/d/<sheet id>/edit", gid: 0 },
-    // { label: "S Market", type: "campaigns", file: "s_market*.csv", editUrl: "...", gid: 0 },
-    // { label: "KPI forecast – Total App", type: "kpi", vertical: "Total", file: "*L1*Total*.csv", editUrl: "...", gid: 0 },
+    { label: "Seasonal Moments", type: "moments",    sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=680008376#gid=680008376" },
+    { label: "S Market",         type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=1579014905#gid=1579014905" },
+    { label: "Restaurants",      type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=692704700#gid=692704700" },
+    { label: "Snoomart",         type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=446324488#gid=446324488" },
+    { label: "Grocery",          type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=1905035169#gid=1905035169" },
+    { label: "S Laundry",        type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=736725729#gid=736725729" },
+    { label: "Services",         type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=2033078747#gid=2033078747" },
+    { label: "New Ventures",     type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=312703355#gid=312703355" },
+    { label: "KPI Forecast",     type: "kpi_engine", sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=1008622602#gid=1008622602" },
   ],
 
   // Values allowed in relevant_verticals that are audiences, not campaign verticals.
@@ -721,6 +723,8 @@ const ISSUE_TYPES = {
   missing_date: "Missing date",
   invalid_date: "Invalid date",
   end_before_start: "End date before start date",
+  date_format: "Date typed as D/M/YYYY",
+  vertical_mismatch: "Row's vertical differs from its tab",
   id_pattern: "id doesn't follow the pattern",
   budget_nan: "Budget is not a number",
   duplicate_id: "Duplicate id",
@@ -934,7 +938,12 @@ function buildPlan(sources, options = {}) {
     if (!r.name) add({ severity: "error", code: "missing_name", src, row: r, field: "name", message: "Missing name." });
 
     checkList(r, src, "tier", ALLOWED.tier, true);
+    // On a vertical's tab a blank vertical means the tab's vertical.
+    if (!r.vertical && src.tabVertical && canonical(ALLOWED.tier, r.tier) !== MOMENT) r.vertical = src.tabVertical;
     checkList(r, src, "vertical", ALLOWED.vertical, true);
+    if (src.tabVertical && r.vertical && !r._bad_vertical && r.tier !== MOMENT && r.vertical !== src.tabVertical) {
+      add({ severity: "warning", code: "vertical_mismatch", src, row: r, field: "vertical", message: `Vertical is "${r.vertical}" but this is the ${src.tabVertical} tab.`, values: [r.vertical, src.tabVertical] });
+    }
     checkList(r, src, "status", ALLOWED.status, true);
     const isMoment = r.tier === MOMENT;
     // Moments hold MarCom's moment type in campaign_type (any value); campaigns use the strict list.
@@ -971,9 +980,12 @@ function buildPlan(sources, options = {}) {
     for (const [field, key] of [["start_date", "_start"], ["end_date", "_end"]]) {
       const raw = r[field];
       if (!raw) { add({ severity: "error", code: "missing_date", src, row: r, field, message: `Missing ${field}.`, values: [field] }); continue; }
-      const d = parseISODate(raw);
+      let d = parseISODate(raw);
+      if (d === null && (d = parseSlashDate(raw)) !== null) {
+        add({ severity: "warning", code: "date_format", src, row: r, field, message: `${field} "${raw}" was read as ${fmtDay(d)} (day/month/year). Use YYYY-MM-DD so it can't be misread.`, values: [field, raw] });
+      }
       if (d === null) {
-        const hint = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? "is not a real calendar date" : looksLikeDate(raw) ? "must be in YYYY-MM-DD format" : "is not a date";
+        const hint = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? "is not a real calendar date" : looksLikeDate(raw) ? "must be in YYYY-MM-DD format (or D/M/YYYY)" : "is not a date";
         add({ severity: "error", code: "invalid_date", src, row: r, field, message: `${field} "${raw}" ${hint}.`, values: [field, raw] });
         r[`_bad_${field}`] = true;
       } else r[key] = d;
@@ -1083,6 +1095,7 @@ const SCENARIO_FIELDS = ["forecast", "bear", "bull", "actual"];
 
 Object.assign(ISSUE_TYPES, {
   kpi_not_kpi_file: "KPI source isn't in a known KPI layout",
+  kpi_layout: "KPI tab isn't in the engine layout",
   kpi_vertical_unset: "KPI file's vertical isn't set",
   kpi_duplicate_source: "Two KPI files for the same vertical",
   kpi_unknown_vertical: "Unknown vertical in a KPI source",
@@ -1097,12 +1110,23 @@ Object.assign(ISSUE_TYPES, {
 
 // Numbers may carry thousands separators and quotes ("101,623", "10,077,762.51").
 // Returns null for blank, NaN for anything unreadable.
+// "102.9%" -> 1.029.
 function parseNumber(s) {
-  const t = String(s ?? "").replace(/["'\s,]/g, "");
+  let t = String(s ?? "").replace(/["'\s,]/g, "");
   if (!t) return null;
-  return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(t) ? Number(t) : NaN;
+  const pct = t.endsWith("%");
+  if (pct) t = t.slice(0, -1);
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(t)) return NaN;
+  return Number(pct ? `${t}e-2` : t);   // "102.9e-2" parses exactly; 102.9 / 100 doesn't
 }
 function parseAnyDate(s) { const t = s.trim(); return parseISODate(t) ?? parseDMYDate(t); }
+// D/M/YYYY (day first), e.g. 5/11/2026 = 5 Nov 2026. Accepted, but flagged:
+// a typed date like this is easy to misread as month-first.
+function parseSlashDate(s) {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s.trim());
+  if (!m || !validYMD(+m[3], +m[2] - 1, +m[1])) return null;
+  return dayFromYMD(+m[3], +m[2] - 1, +m[1]);
+}
 
 // What kind of file is this? Decided from the contents, never the file name.
 function detectFileType(records) {
@@ -1121,7 +1145,8 @@ function engineLayer(records) {
 // The vertical an engine file belongs to: the config entry wins, else Layer 1 = Total.
 function engineVertical(src, records) {
   if (src.vertical) return src.vertical;
-  return engineLayer(records) === 1 ? KPI_TOTAL : null;
+  const layer = engineLayer(records);
+  return layer === 1 || layer === null ? KPI_TOTAL : null;
 }
 const KPI_VERTICALS = () => [KPI_TOTAL, ...ALLOWED.vertical.filter(v => v !== "Cross-vertical")];
 
@@ -1196,6 +1221,12 @@ function buildKpi(sources, options = {}) {
     }
     const v = vEntry(vertical, src.statusMode);
     v.sources.push(src._idx);
+    // Layout check: title in row 1, header starting "Date" in row 2.
+    const headerCell = ((records[1] || [])[0] || "").trim();
+    if (headerCell.toLowerCase() !== "date") {
+      add({ severity: "error", code: "kpi_layout", src, sheetRow: 2, id: vertical,
+        message: `Expected the engine layout: a title in row 1 and a header starting with "Date" in row 2, then one row per day. Row 2 starts with "${headerCell}".`, values: [headerCell] });
+    }
 
     const seen = new Map();   // day -> sheet row
     for (let r = 2; r < records.length; r++) {
@@ -1203,7 +1234,10 @@ function buildKpi(sources, options = {}) {
       const sheetRow = r + 1;
       if (!cells.some(c => c.trim())) { summary.blankRows++; continue; }
       const raw = (cells[ENGINE_LAYOUT.date] || "").trim();
-      const day = parseAnyDate(raw);
+      let day = parseAnyDate(raw);
+      if (day === null && (day = parseSlashDate(raw)) !== null) {
+        add({ severity: "warning", code: "date_format", src, day, sheetRow, id: vertical, message: `Date "${raw}" was read as ${fmtDay(day)} (day/month/year). The engine format is DD-Mmm-YY, e.g. 14-May-26.`, values: [raw] });
+      }
       if (day === null) {
         add({ severity: "error", code: "kpi_bad_date", src, sheetRow, id: vertical, message: `Date "${raw}" can't be read. Expected DD-Mmm-YY, e.g. 14-May-26.`, values: [raw] });
         continue;
@@ -1257,7 +1291,10 @@ function buildKpi(sources, options = {}) {
       const sheetRow = r + 1;
       if (!cells.some(c => c.trim())) { summary.blankRows++; continue; }
       const rawDate = get(cells, "date");
-      const day = parseAnyDate(rawDate);
+      let day = parseAnyDate(rawDate);
+      if (day === null && (day = parseSlashDate(rawDate)) !== null) {
+        add({ severity: "warning", code: "date_format", src, day, sheetRow, id: get(cells, "vertical"), message: `Date "${rawDate}" was read as ${fmtDay(day)} (day/month/year). Use YYYY-MM-DD.`, values: [rawDate] });
+      }
       if (day === null) { add({ severity: "error", code: "kpi_bad_date", src, sheetRow, id: get(cells, "vertical"), message: `Date "${rawDate}" can't be read. Use YYYY-MM-DD.`, values: [rawDate] }); continue; }
       let vertical = get(cells, "vertical") || KPI_TOTAL;
       const known = knownVerticals.find(k => k.toLowerCase() === vertical.toLowerCase());
@@ -1478,15 +1515,74 @@ function fmtCompact(value, mDecimals = 1) {
   return fmtNum(value);
 }
 
+/* ---------- Sources from the config ---------- */
+
+const normName = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+// "S Laundry" -> "SLaundry": tab names match verticals ignoring spaces and case.
+function canonicalVertical(name) { return ALLOWED.vertical.find(v => normName(v) === normName(name)) || null; }
+// "*L1*Total*.csv" -> regex; case-insensitive, * = anything.
+function globToRegex(glob) {
+  return new RegExp(`^${glob.split("*").map(p => p.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "i");
+}
+
+// { label, type, sheetUrl } + the spreadsheet's publishedId -> everything else:
+//   editUrl  https://docs.google.com/spreadsheets/d/<sheet id>/edit
+//   gid      the tab id from sheetUrl
+//   url      https://docs.google.com/spreadsheets/d/e/<publishedId>/pub?gid=<gid>&single=true&output=csv
+//   tabVertical  campaign tabs: the vertical named after the tab
+// Advanced overrides (url, editUrl, gid, file, vertical, statusMode) still win when given.
+function resolveConfigSource(c, publishedId) {
+  const sheetUrl = c.sheetUrl || "";
+  const sheetId = (/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/.exec(sheetUrl) || [])[1];
+  const gid = c.gid ?? (/[?#&]gid=(\d+)/.exec(sheetUrl) || [])[1];
+  return {
+    label: c.label,
+    type: c.type,
+    gid,
+    editUrl: c.editUrl || (sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : undefined),
+    url: c.url || (publishedId && gid != null ? `https://docs.google.com/spreadsheets/d/e/${publishedId}/pub?gid=${gid}&single=true&output=csv` : undefined),
+    file: c.file,
+    tabVertical: c.type === "campaigns" ? canonicalVertical(c.vertical || c.label) || c.vertical || c.label : undefined,
+    vertical: c.type === "kpi_engine" || c.type === "kpi" ? c.vertical : undefined,
+    statusMode: c.statusMode,
+  };
+}
+
+// The config entry for a loaded source. URL sources match by url. Dropped files
+// match a `file` pattern if one is set, otherwise the tab name in the file name:
+// Google names a downloaded tab "<spreadsheet> - <tab>.csv", so "… - S Market.csv"
+// and "s_market.csv" both match "S Market". The longest matching name wins.
+function configForSource(src, resolved) {
+  if (src.origin === "url") return resolved.find(c => c.url && c.url === src.url) || null;
+  const base = src.label.replace(/\.csv$/i, "");
+  const name = normName(base.includes(" - ") ? base.split(" - ").pop() : base);
+  const hits = resolved.filter(c => (c.file ? globToRegex(c.file).test(src.label) : normName(c.label) && name.includes(normName(c.label))));
+  return hits.sort((a, b) => normName(b.label).length - normName(a.label).length)[0] || null;
+}
+function applySourceConfig(src, resolved) {
+  const c = configForSource(src, resolved);
+  if (!c) return src;
+  return {
+    ...src,
+    type: c.type,
+    kind: c.type === "moments" ? "moments" : c.type === "campaigns" ? "vertical" : src.kind,
+    tabVertical: c.tabVertical,
+    vertical: c.vertical ?? src.vertical,
+    statusMode: c.statusMode ?? src.statusMode,
+  };
+}
+
 /* ---------- Everything together ---------- */
 
 // Read a source's CSV once and decide what it is. Config type wins; otherwise
 // the contents decide (engine title/header, long KPI header, else plan rows).
 function classifySource(src) {
-  if (src.loadError) return { ...src, _fileType: src.type === "kpi" ? "kpi_long" : "plan", _records: [] };
+  // A source that failed to load is reported by the plan step ("Could not load").
+  if (src.loadError) return { ...src, _fileType: "plan", _records: [] };
   const { records, unterminated } = parseCSV(src.text || "");
   let fileType = detectFileType(records);
   if (src.type === "moments" || src.type === "campaigns") fileType = "plan";
+  else if (src.type === "kpi_engine") fileType = "kpi_engine";
   else if (src.type === "kpi" && fileType === "plan") fileType = "kpi_unknown";
   return { ...src, _records: records, _unterminated: unterminated, _fileType: fileType };
 }
@@ -1611,7 +1707,10 @@ async function addFiles(fileList, handles = new Map()) {
 }
 
 async function loadUrls() {
-  const fetched = await Promise.all(CONFIG.sources.filter(s => s.url).map(fetchUrlSource));
+  state.loading = true;
+  render();
+  const fetched = await Promise.all(configuredSources().filter(s => s.url).map(fetchUrlSource));
+  state.loading = false;
   // Keep any files dropped on top of the URL sources
   state.sources = [...fetched, ...state.sources.filter(s => s.origin === "file")];
   rebuild();
@@ -1627,27 +1726,11 @@ function clearData() {
 
 /* ---------- Config matching ---------- */
 
-// "*L1*Total*.csv" -> regex; case-insensitive, * = anything.
-function globToRegex(glob) {
-  return new RegExp(`^${glob.split("*").map(p => p.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "i");
-}
-// The config entry for a loaded source: URL sources by url, files by their `file` pattern.
-function configFor(src) {
-  if (src.origin === "url") return CONFIG.sources.find(c => c.url && c.url === src.url) || null;
-  return CONFIG.sources.find(c => c.file && globToRegex(c.file).test(src.label)) || null;
-}
-// Source as handed to the core: config fields (type, vertical, statusMode) filled in.
-function withConfig(src) {
-  const c = configFor(src);
-  if (!c) return src;
-  return {
-    ...src,
-    type: c.type,
-    kind: c.type === "moments" ? "moments" : c.type === "campaigns" ? "vertical" : src.kind,
-    vertical: c.vertical ?? src.vertical,
-    statusMode: c.statusMode ?? src.statusMode,
-  };
-}
+// CONFIG.sources resolved into urls, edit links and verticals (see resolveConfigSource).
+const configuredSources = () => CONFIG.sources.map(c => resolveConfigSource(c, CONFIG.publishedId));
+const configFor = src => configForSource(src, configuredSources());
+// Source as handed to the core: type, vertical and status mode from its config entry.
+const withConfig = src => applySourceConfig(src, configuredSources());
 const coreOptions = () => ({
   informationalAudiences: CONFIG.informationalAudiences,
   kpiDefinitions: CONFIG.kpiDefinitions,
@@ -1665,7 +1748,15 @@ function rebuild() {
 function render() {
   renderLoaderBar();
   const has = state.sources.length > 0;
-  $("#emptyState").classList.toggle("hidden", has);
+  const allFailed = has && state.sources.every(s => s.loadError);
+  $("#emptyState").classList.toggle("hidden", has && !allFailed);
+  $("#emptyState").innerHTML = state.loading && !has
+    ? `<h2>Loading the marketing plan…</h2><p>Fetching ${configuredSources().filter(c => c.url).length} tabs from Google Sheets.</p>`
+    : allFailed
+    ? `<h2>Couldn't load the Google Sheets</h2><p>${esc(state.sources[0].loadError.replace(/^./, c => c.toUpperCase()))}. Check your connection and click Reload data, or drop CSV exports of the tabs here instead.</p>
+       <button data-action="reload">Reload data</button> <button class="primary" data-action="pick">Choose CSV files</button>`
+    : `<h2>Load your marketing plan</h2><p>Drop the CSV exports here: the Seasonal Moments tab, one tab per vertical, and the KPI forecast.</p>
+       <button class="primary" data-action="pick">Choose CSV files</button>`;
   $("#sourcesCard").classList.toggle("hidden", !has);
   $("#issuesCard").classList.toggle("hidden", !has);
   $("#filtersCard").classList.toggle("hidden", !has);
@@ -2374,11 +2465,11 @@ function editButton(sourceIdx, row, label = "Edit in sheet", small = false) {
 }
 
 function sheetsMenuHTML() {
-  const items = CONFIG.sources.filter(c => c.editUrl);
+  const items = configuredSources().filter(c => c.editUrl);
   return `<details class="ms sheets-menu" data-menu="sheets" ${state.openMenu === "sheets" ? "open" : ""}>
     <summary>Open sheets</summary>
     <div class="ms-menu" style="right:0;left:auto;min-width:260px">
-      ${items.length ? items.map(c => `<a class="menu-link" href="${esc(sheetLink(c))}" target="_blank" rel="noopener">${esc(c.label)} <span class="faint">${esc(c.type || "")}</span></a>`).join("")
+      ${items.length ? items.map(c => `<a class="menu-link" href="${esc(sheetLink(c))}" target="_blank" rel="noopener">${esc(c.label)} <span class="faint">${esc({ moments: "moments", campaigns: "campaigns", kpi_engine: "KPI", kpi: "KPI" }[c.type] || "")}</span></a>`).join("")
         : `<div class="faint" style="padding:6px 8px;max-width:260px">No sheet links yet. Add <span class="mono">editUrl</span> and <span class="mono">gid</span> to each source in the CONFIG block at the top of index.html.</div>`}
     </div></details>`;
 }
@@ -2436,7 +2527,11 @@ async function fetchUrlSource(c) {
     if (/^\s*<(!doctype|html)/i.test(text)) throw new Error("got a web page instead of CSV. Use the 'Publish to web' CSV link.");
     return { ...base, text };
   } catch (e) {
-    return { ...base, text: "", loadError: e.message || String(e) };
+    // Browsers report network, CORS and blocked-host failures all as a TypeError.
+    const msg = e instanceof TypeError
+      ? "couldn't reach Google Sheets (no connection, a blocked network, or the spreadsheet isn't published to the web)"
+      : e.message || String(e);
+    return { ...base, text: "", loadError: msg };
   }
 }
 
@@ -2444,7 +2539,7 @@ async function fetchUrlSource(c) {
 // filters and the open panel stay as they are.
 async function reloadData() {
   notice("Reloading…", true);
-  const urlSources = CONFIG.mode === "urls" ? await Promise.all(CONFIG.sources.filter(c => c.url).map(fetchUrlSource)) : [];
+  const urlSources = CONFIG.mode === "urls" ? await Promise.all(configuredSources().filter(c => c.url).map(fetchUrlSource)) : [];
   const missing = [];
   let reread = 0;
   const files = await Promise.all(state.sources.filter(s => s.origin === "file").map(async s => {
