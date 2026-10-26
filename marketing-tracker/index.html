@@ -418,6 +418,8 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
   .legend { padding: 4px 0 6px; border-bottom: 0; }
   .tl-scroll { overflow: visible; }
   .tl { min-width: 0 !important; width: 100%; --label-w: 150px; }
+  .tl.has-kpi { --mtd-w: 150px; }
+  #tip, .kpi-toggles, .kpi-prompt button { display: none !important; }
   .tl-head { border-top: 1px solid var(--border-strong); }
   .tl-row, .tl-lane-head, .wk-card { break-inside: avoid; }
   .tl-lane-head { break-after: avoid; }
@@ -434,6 +436,83 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
   .week-col > h3 { padding: 6px 10px; }
 }
 
+/* ---------- KPI strip (month) ---------- */
+:root {
+  --k-green-bg: #d9f2e1; --k-green: #14532d;
+  --k-amber-bg: #fdecc8; --k-amber: #7c4a03;
+  --k-red-bg: #fbd5d5;   --k-red: #8f1d1d;
+  --k-over: #2563eb;
+}
+.tl { --mtd-w: 0px; }
+.tl.has-kpi { --mtd-w: 172px; }
+.tl-row { padding-right: var(--mtd-w); position: relative; }
+.tl-grid, .tl-bands { right: var(--mtd-w); }
+.tl-kpi-head { display: flex; align-items: center; gap: 10px; padding: 6px 14px 4px; background: var(--surface-2); border-bottom: 1px solid var(--border); position: relative; z-index: 3; }
+.tl-kpi-head h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+.kpi-scope { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #fff; border: 1px solid var(--border-strong); color: var(--text-2); }
+.kpi-row { min-height: 34px; }
+.kpi-row .tl-label { font-weight: 600; color: var(--text); }
+.kpi-row .tl-label .unit { color: var(--text-3); font-weight: 500; font-size: 11px; }
+.kc {
+  position: absolute; top: 3px; bottom: 3px; margin: 0 1px; padding: 0;
+  border: 0; border-radius: 3px; z-index: 2; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+.kc.s-green, .s-green-cell { background: var(--k-green-bg); color: var(--k-green); }
+.kc.s-amber, .s-amber-cell { background: var(--k-amber-bg); color: var(--k-amber); }
+.kc.s-red, .s-red-cell { background: var(--k-red-bg); color: var(--k-red); }
+.kc.s-over, .s-over-cell { background: var(--k-green-bg); color: var(--k-green); box-shadow: inset 0 0 0 2px var(--k-over); }
+.kc.s-no_actual { background: transparent; color: var(--text-3); font-weight: 500; font-style: italic; box-shadow: inset 0 0 0 1px var(--border); }
+.kc:hover { filter: brightness(.95); }
+.kc.sm { font-size: 8.5px; letter-spacing: -.03em; }
+.kc.today { outline: 2px solid var(--error); outline-offset: -1px; }
+.mtd {
+  position: absolute; right: 0; top: 0; bottom: 0; width: var(--mtd-w);
+  border-left: 1px solid var(--border-strong); background: var(--surface); z-index: 3;
+  padding: 2px 8px; display: flex; flex-direction: column; justify-content: center; font-size: 11px; line-height: 1.25;
+  cursor: default;
+}
+.mtd .top { display: flex; align-items: center; gap: 6px; font-weight: 650; }
+.mtd .sub { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mtd-head { position: absolute; right: 0; top: 0; bottom: 0; width: var(--mtd-w); border-left: 1px solid var(--border-strong); display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 600; color: var(--text-2); background: var(--surface); }
+.st-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.st-dot.s-green { background: #22a052; } .st-dot.s-amber { background: #e08a00; } .st-dot.s-red { background: var(--error); }
+.st-dot.s-over { background: #22a052; box-shadow: 0 0 0 2px var(--k-over); } .st-dot.s-no_actual, .st-dot.s-none { background: var(--border-strong); }
+.kpi-prompt { padding: 10px 14px; font-size: 13px; color: var(--text-2); background: #f8fafc; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.kpi-toggles { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--text-2); }
+.kpi-toggles label { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--border-strong); border-radius: 12px; cursor: pointer; }
+.kpi-toggles label:has(input:checked) { background: var(--text); color: #fff; border-color: var(--text); }
+.kpi-toggles input { display: none; }
+.actuals-through { font-size: 12px; color: var(--text-2); padding: 2px 10px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); white-space: nowrap; }
+
+/* Hover card for KPI cells */
+#tip {
+  position: fixed; z-index: 60; pointer-events: none; display: none;
+  background: #111827; color: #f9fafb; border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25); max-width: 300px;
+}
+#tip h5 { margin: 0 0 4px; font-size: 12px; }
+#tip table { border-collapse: collapse; }
+#tip td { padding: 0 10px 0 0; white-space: nowrap; }
+#tip td.v { text-align: right; font-variant-numeric: tabular-nums; }
+#tip .st { margin-top: 4px; font-weight: 600; }
+
+/* ---------- KPI table (week) ---------- */
+.week-kpi { border-bottom: 1px solid var(--border); overflow-x: auto; }
+.week-kpi table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.week-kpi th, .week-kpi td { padding: 4px 8px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+.week-kpi thead th { background: var(--surface-2); font-weight: 600; color: var(--text-2); position: sticky; top: 0; }
+.week-kpi thead th.dayh { cursor: pointer; }
+.week-kpi thead th.dayh:hover { color: var(--accent); }
+.week-kpi thead th.today { color: var(--error); }
+.week-kpi th.rowh { text-align: left; font-weight: 500; color: var(--text-2); }
+.week-kpi tr.kname th { text-align: left; background: #fafbfc; font-weight: 700; color: var(--text); border-top: 1px solid var(--border-strong); }
+.week-kpi td.wk-total { border-left: 2px solid var(--border-strong); font-weight: 600; }
+.week-kpi td.na { color: var(--text-3); font-style: italic; }
+.week-kpi td.neg { color: var(--k-red); } .week-kpi td.pos { color: var(--k-green); }
+.week-kpi .foot { padding: 6px 14px; font-size: 11px; color: var(--text-2); }
+
 .placeholder { padding: 40px; text-align: center; color: var(--text-2); }
 .hidden { display: none !important; }
 </style>
@@ -443,6 +522,7 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
 
 <header class="app-header">
   <h1>Marketing Tracker</h1>
+  <span class="actuals-through hidden" id="actualsThrough"></span>
   <div class="seg" role="group" aria-label="View">
     <button data-view="month" aria-pressed="true">Month</button>
     <button data-view="week" aria-pressed="false">Week</button>
@@ -505,6 +585,7 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
       <input type="month" id="monthJump" aria-label="Jump to month">
       <button data-action="today">Today</button>
       <span class="muted" id="monthCount"></span>
+      <span class="kpi-toggles" id="kpiToggles"></span>
     </header>
     <div class="legend" id="monthLegend"></div>
     <div class="tl-scroll"><div class="tl" id="timeline"></div></div>
@@ -521,6 +602,7 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
       <button data-action="today">This week</button>
       <span class="muted" id="weekRange"></span>
     </header>
+    <div class="week-kpi" id="weekKpi"></div>
     <div class="week-body" id="weekBody"></div>
     <div class="tl-note" id="weekNote"></div>
   </section>
@@ -531,6 +613,7 @@ input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px
 </main>
 
 <div id="panelRoot"></div>
+<div id="tip" role="tooltip"></div>
 
 <script>
 /* CORE:BEGIN — pure data logic, no DOM. tools/check.mjs runs this block in Node. */
@@ -1332,11 +1415,11 @@ function fmtKpi(value, def, signed = false) {
   const s = `${signed && value > 0 ? "+" : ""}${fmtNum(Math.round(value))}`;
   return def?.unit === "QAR" ? `QAR ${s}` : s;
 }
-// Short form for narrow cells: 104k, 10.1M, 97.
-function fmtCompact(value) {
+// Short form for narrow cells: 104k, 10.1M, 97. mDecimals: decimals for millions.
+function fmtCompact(value, mDecimals = 1) {
   if (value == null || Number.isNaN(value)) return "—";
   const a = Math.abs(value);
-  if (a >= 1e6) return `${(value / 1e6).toFixed(a >= 1e7 ? 1 : 2)}M`;
+  if (a >= 1e6) return `${(value / 1e6).toFixed(a >= 1e8 ? 1 : mDecimals)}M`;
   if (a >= 1e4) return `${Math.round(value / 1e3)}k`;
   if (a >= 1e3) return `${(value / 1e3).toFixed(1)}k`;
   return fmtNum(value);
@@ -1428,6 +1511,7 @@ const state = {
   visibleKeys: new Set(), // rows passing the filters, recomputed on every render
   panelKey: null,       // row shown in the side panel
   printWidth: null,     // px width of the printable area while printing
+  kpiShow: new Set(Object.keys(CONFIG.kpiDefinitions)),   // KPI rows shown in the month strip
 };
 
 const $ = sel => document.querySelector(sel);
@@ -1536,6 +1620,7 @@ function render() {
   renderSources();
   renderIssues();
   renderFilters();
+  renderActualsThrough();
   renderPrintHeader();
   const viewEl = { month: "#viewMonth", week: "#viewWeek", data: "#viewData" }[state.view];
   $(viewEl).classList.remove("hidden");
@@ -1637,8 +1722,14 @@ function renderMonth() {
   const inMonth = dated.filter(r => r._start <= mEnd && r._end >= mStart);
   $("#monthCount").textContent = `${inMonth.length} initiative${inMonth.length === 1 ? "" : "s"} this month`;
 
-  // Legend: verticals present in the data, then status styles
+  // Legend: verticals present in the data, then status styles, then KPI colours
   const verticals = ALLOWED.vertical.filter(v => allRows.some(r => r.vertical === v));
+  const kpiKey = kpiContext() ? `<span class="sep"></span><span class="group"><span class="group-title">KPI</span>
+    <span class="item"><span class="sw s-green-cell"></span>At/above forecast</span>
+    <span class="item"><span class="sw s-amber-cell"></span>Below forecast, above bear</span>
+    <span class="item"><span class="sw s-red-cell"></span>Below bear</span>
+    <span class="item"><span class="sw s-over-cell"></span>Above bull</span>
+    <span class="item"><span class="sw" style="box-shadow:inset 0 0 0 1px var(--border-strong)"></span>No actual yet</span></span>` : "";
   $("#monthLegend").innerHTML = `
     <span class="group"><span class="group-title">Vertical</span>${verticals.map(v =>
       `<span class="item"><span class="sw" style="background:${verticalColor(v)}"></span>${esc(v)}</span>`).join("")}</span>
@@ -1649,12 +1740,19 @@ function renderMonth() {
     <span class="group"><span class="item"><span class="sw" style="background:rgba(71,85,105,.2);border:1px solid rgba(71,85,105,.6)"></span>T1 moment period</span>
     <span class="item"><span class="sw" style="background:rgba(71,85,105,.08);border:1px dashed rgba(71,85,105,.45)"></span>T2/T3 moment period</span>
     <span class="item"><span class="sw-bar" style="background:#eef0f3;border:1.5px dashed var(--v-cvt)"></span>Date tentative</span>
-    <span class="item">◀ ▶ Continues past the month</span></span>`;
+    <span class="item">◀ ▶ Continues past the month</span></span>${kpiKey}`;
+
+  // KPI strip: shown when a KPI source is loaded and at least one KPI is ticked
+  const kctx = kpiContext();
+  const showStrip = !!kctx && shownKpis(kctx).length > 0;
+  renderKpiToggles(kctx);
 
   // Pixel geometry, used only to decide label placement and row packing
   const tl = $("#timeline");
+  tl.classList.toggle("has-kpi", showStrip);
   const labelW = state.printWidth ? 150 : 210;   // matches --label-w on screen and in print
-  const trackPx = (state.printWidth || Math.max(980, tl.parentElement.clientWidth)) - labelW;
+  const mtdW = showStrip ? (state.printWidth ? 150 : 172) : 0;   // matches --mtd-w
+  const trackPx = (state.printWidth || Math.max(980, tl.parentElement.clientWidth)) - labelW - mtdW;
   const pxPerDay = trackPx / n;
 
   // Header: week labels (weeks start Sunday) and day numbers
@@ -1667,7 +1765,7 @@ function renderMonth() {
   }
   for (let d = mStart; d <= mEnd; d++) {
     const wd = weekday(d);
-    days += `<div class="day-cell ${wd === 0 ? "sun" : ""} ${d === today ? "today" : ""}" style="left:${pct(d, mStart, n)};width:${100 / n}%">
+    days += `<div class="day-cell ${wd === 0 ? "sun" : ""} ${d === today ? "today" : ""}" data-day="${d}" style="left:${pct(d, mStart, n)};width:${100 / n}%">
       ${pxPerDay >= 30 ? `<span>${"SMTWTFS"[wd]}</span>` : ""}<b>${dayToDate(d).getUTCDate()}</b></div>`;
   }
 
@@ -1734,9 +1832,9 @@ function renderMonth() {
   tl.innerHTML = `
     <div class="tl-head">
       <div class="tl-row tl-weeks"><div class="tl-label">Week (Sun–Sat)</div><div class="tl-track">${weeks}</div></div>
-      <div class="tl-row tl-days"><div class="tl-label"></div><div class="tl-track">${days}</div></div>
+      <div class="tl-row tl-days"><div class="tl-label"></div><div class="tl-track">${days}</div>${showStrip ? `<div class="mtd-head">Month to date</div>` : ""}</div>
     </div>
-    <div class="tl-body"><div class="tl-grid">${grid}</div>${body}</div>`;
+    <div class="tl-body"><div class="tl-grid">${grid}</div>${showStrip ? kpiStripHTML(kctx, mStart, mEnd, n, pxPerDay) : kctx ? "" : kpiPrompt()}${body}</div>`;
 
   $("#monthNote").innerHTML = undated.length
     ? `${undated.length} initiative${undated.length === 1 ? " isn't" : "s aren't"} on the timeline because of missing or invalid dates:
@@ -1960,6 +2058,9 @@ document.addEventListener("change", e => {
   if (t.dataset.filter) {
     state.filters[t.dataset.filter] = t.value;
     render();
+  } else if (t.dataset.kpiShow !== undefined) {
+    t.checked ? state.kpiShow.add(t.dataset.kpiShow) : state.kpiShow.delete(t.dataset.kpiShow);
+    render();
   } else if (t.dataset.momentTier !== undefined) {
     t.checked ? state.filters.momentTiers.add(t.dataset.momentTier) : state.filters.momentTiers.delete(t.dataset.momentTier);
     render();
@@ -1979,6 +2080,192 @@ document.addEventListener("toggle", e => {
     else if (state.openMenu === e.target.dataset.menu) state.openMenu = null;
   }
 }, true);
+
+/* ---------- KPI views ---------- */
+
+// Which KPI series to show: the selected vertical when exactly one is selected
+// and it has a KPI source; otherwise the company total.
+function kpiContext() {
+  const kpi = state.data?.kpi;
+  if (!kpi || !kpi.verticals.size) return null;
+  const sel = state.filters.verticals;
+  if (sel && sel.size === 1 && kpi.verticals.has([...sel][0])) {
+    const v = [...sel][0];
+    return { kpi, vertical: v, label: v, total: false };
+  }
+  if (kpi.verticals.has(KPI_TOTAL)) return { kpi, vertical: KPI_TOTAL, label: "Company total", total: true };
+  const first = [...kpi.verticals.keys()][0];
+  return { kpi, vertical: first, label: first, total: false };
+}
+const kpiMode = ctx => kpiStatusMode(ctx.kpi, ctx.vertical, CONFIG.kpiStatus);
+const kpiStatusOf = (ctx, key, point) => kpiStatus(point, ctx.kpi.defs[key], kpiMode(ctx), CONFIG.kpiStatus.thresholdPct);
+const shownKpis = ctx => Object.keys(ctx.kpi.defs).filter(k => state.kpiShow.has(k));
+
+function statusText(st) {
+  const t = CONFIG.kpiStatus.thresholdPct;
+  const text = st.basis === "threshold"
+    ? { over: `More than ${t}% above forecast`, green: "At or above forecast", amber: `Below forecast, within ${t}%`, red: `More than ${t}% below forecast` }
+    : { over: "Above bull", green: "At or above forecast", amber: "Below forecast, at or above bear", red: "Below bear" };
+  if (st.status === "no_actual") return "No actual yet";
+  if (st.status === "none") return "No forecast";
+  return text[st.status] + (st.status === "over" && st.basis !== "threshold" ? " (at or above forecast)" : "");
+}
+const signed = (v, fmt) => (v == null ? "—" : `${Math.round(v) > 0 ? "+" : ""}${fmt(v)}`);
+
+function renderActualsThrough() {
+  const ctx = kpiContext();
+  const el = $("#actualsThrough");
+  if (!ctx) { el.classList.add("hidden"); return; }
+  const d = kpiLatestActual(ctx.kpi, ctx.vertical);
+  el.textContent = (d != null ? `Actuals through ${fmtDayShort(d)}` : "No actuals yet") + (ctx.total ? "" : ` · ${ctx.label}`);
+  el.title = `KPI actuals for ${ctx.label}`;
+  el.classList.remove("hidden");
+}
+
+function kpiPrompt() {
+  return `<div class="kpi-prompt">No KPI forecast loaded. Drop the forecasting engine export (or a long-format KPI file) to see daily orders, GMV and AOV against forecast.
+    <button data-action="pick">Choose KPI file</button></div>`;
+}
+
+function renderKpiToggles(ctx) {
+  $("#kpiToggles").innerHTML = ctx ? `KPIs ${Object.entries(ctx.kpi.defs).map(([k, d]) =>
+    `<label><input type="checkbox" data-kpi-show="${esc(k)}" ${state.kpiShow.has(k) ? "checked" : ""}>${esc(d.label)}</label>`).join("")}` : "";
+}
+
+// KPI rows under the date axis, on the same day columns as the bars.
+function kpiStripHTML(ctx, mStart, mEnd, n, pxPerDay) {
+  const today = todayDay();
+  const keys = shownKpis(ctx);
+  let html = `<div class="tl-kpi-head"><h3>Daily KPIs</h3><span class="kpi-scope">${esc(ctx.label)}</span>
+    <span class="muted" style="font-size:11px">Actual, or forecast in grey italics where there's no actual yet</span></div>`;
+  for (const key of keys) {
+    const def = ctx.kpi.defs[key];
+    let cells = "";
+    for (let d = mStart; d <= mEnd; d++) {
+      const p = kpiPoint(ctx.kpi, ctx.vertical, key, d);
+      if (!p || (p.forecast == null && p.actual == null)) continue;
+      const st = kpiStatusOf(ctx, key, p);
+      const value = p.actual ?? p.forecast;
+      cells += `<button class="kc s-${st.status} ${d === today ? "today" : ""} ${pxPerDay < 30 ? "sm" : ""}" data-day="${d}" data-tip="day" data-kpi="${esc(key)}"
+        style="left:${pct(d, mStart, n)};width:calc(${100 / n}% - 2px)" aria-label="${esc(def.label)} ${fmtDay(d)}">${pxPerDay >= 21 ? fmtCompact(value) : ""}</button>`;
+    }
+    const m = kpiPeriod(ctx.kpi, ctx.vertical, key, mStart, mEnd);
+    html += `<div class="tl-row kpi-row"><div class="tl-label">${esc(def.label)}${def.unit === "QAR" ? ` <span class="unit">QAR</span>` : ""}</div>
+      <div class="tl-track">${cells}</div>${mtdHTML(ctx, key, m, mStart, mEnd)}</div>`;
+  }
+  return html;
+}
+
+function mtdHTML(ctx, key, m, from, to) {
+  if (!m) return `<div class="mtd"><span class="sub faint">No forecast this month</span></div>`;
+  const attrs = `data-tip="period" data-kpi="${esc(key)}" data-from="${from}" data-to="${to}"`;
+  if (m.actual == null) {
+    return `<div class="mtd" ${attrs}><div class="top"><span class="st-dot s-none"></span>No actuals yet</div>
+      <div class="sub">Month forecast ${fmtCompact(m.forecastAll)}</div></div>`;
+  }
+  const st = kpiStatusOf(ctx, key, { forecast: m.forecast, bear: m.bear, bull: m.bull, actual: m.actual });
+  const complete = m.daysWithActual === m.days;
+  return `<div class="mtd" ${attrs}>
+    <div class="top"><span class="st-dot s-${st.status}"></span>${complete ? "Month" : "MTD"} ${fmtPct(m.attainment)} <span class="sub" style="font-weight:500">of forecast</span></div>
+    <div class="sub">${complete ? `${fmtCompact(m.actual, 2)} vs ${fmtCompact(m.forecast, 2)}` : `Proj. ${fmtCompact(m.projected, 2)} vs ${fmtCompact(m.forecastAll, 2)}`}</div></div>`;
+}
+
+// Hover card content for a KPI day cell or an MTD/period summary.
+function tipHTML(el) {
+  const ctx = kpiContext();
+  if (!ctx) return "";
+  const key = el.dataset.kpi, def = ctx.kpi.defs[key];
+  if (!def) return "";
+  const v = x => fmtKpi(x, def);
+  const line = (k, val, cls = "") => `<tr><td>${k}</td><td class="v ${cls}">${val}</td></tr>`;
+  if (el.dataset.tip === "day") {
+    const d = +el.dataset.day;
+    const p = kpiPoint(ctx.kpi, ctx.vertical, key, d);
+    if (!p) return "";
+    const st = kpiStatusOf(ctx, key, p);
+    return `<h5>${esc(def.label)} · ${fmtDayShort(d)} ${dayParts(d)[0]}</h5><table>
+      ${line("Forecast", v(p.forecast))}
+      ${p.bear != null ? line("Bear", v(p.bear)) : ""}${p.bull != null ? line("Bull", v(p.bull)) : ""}
+      ${line("Actual", p.actual != null ? v(p.actual) : "no actual yet")}
+      ${p.actual != null ? line("Delta", `${signed(st.delta, x => fmtKpi(x, def))} (${fmtPct(st.deltaPct, true)})`) : ""}
+      ${st.vsBear != null ? line("vs bear", fmtPct(st.vsBear)) : ""}${st.vsBull != null ? line("vs bull", fmtPct(st.vsBull)) : ""}
+      </table><div class="st">${statusText(st)}${st.basis === "threshold" && p.actual != null ? ` · ±${CONFIG.kpiStatus.thresholdPct}% rule` : ""}</div>
+      <div style="opacity:.7;margin-top:2px">${esc(ctx.label)} · click for the day's detail</div>`;
+  }
+  const from = +el.dataset.from, to = +el.dataset.to;
+  const m = kpiPeriod(ctx.kpi, ctx.vertical, key, from, to);
+  if (!m) return "";
+  const st = m.actual != null ? kpiStatusOf(ctx, key, { forecast: m.forecast, bear: m.bear, bull: m.bull, actual: m.actual }) : { status: "no_actual" };
+  return `<h5>${esc(def.label)} · ${fmtDay(from)} – ${fmtDay(to)}</h5><table>
+    ${line("Days with actuals", `${m.daysWithActual} of ${m.days}`)}
+    ${line("Actual", v(m.actual))}
+    ${line("Forecast, same days", v(m.forecast))}
+    ${m.bear != null ? line("Bear, same days", v(m.bear)) : ""}
+    ${line("Attainment", fmtPct(m.attainment))}
+    ${m.vsBear != null ? line("vs bear", fmtPct(m.vsBear)) : ""}
+    ${line("Projected period end", v(m.projected))}
+    ${line("Period forecast", v(m.forecastAll))}
+    </table><div class="st">${statusText(st)}</div>
+    <div style="opacity:.7;margin-top:2px">Projection = actual + remaining forecast × attainment</div>`;
+}
+
+// Weekly KPI table: KPI × day, forecast / actual / delta / delta %, plus a week total.
+function renderWeekKpi(ws) {
+  const el = $("#weekKpi");
+  const ctx = kpiContext();
+  if (!ctx) { el.innerHTML = kpiPrompt(); return; }
+  const today = todayDay();
+  const days = Array.from({ length: 7 }, (_, i) => ws + i);
+  const num = x => (x == null ? "—" : fmtNum(Math.round(x) || 0));   // || 0 turns -0 into 0
+  const tone = x => (x == null ? "" : x < 0 ? "neg" : x > 0 ? "pos" : "");
+  let body = "";
+  for (const [key, def] of Object.entries(ctx.kpi.defs)) {
+    const pts = days.map(d => kpiPoint(ctx.kpi, ctx.vertical, key, d));
+    const sts = pts.map(p => kpiStatusOf(ctx, key, p));
+    const w = kpiPeriod(ctx.kpi, ctx.vertical, key, ws, ws + 6);
+    const wst = w && w.actual != null ? kpiStatusOf(ctx, key, { forecast: w.forecast, bear: w.bear, bull: w.bull, actual: w.actual }) : { status: "none" };
+    const wDelta = w && w.actual != null ? w.actual - w.forecast : null;
+    body += `<tr class="kname"><th colspan="9">${esc(def.label)}${def.unit === "QAR" ? ` <span class="muted" style="font-weight:500">QAR</span>` : ""}</th></tr>
+      <tr><th class="rowh">Forecast</th>${pts.map(p => `<td>${num(p?.forecast)}</td>`).join("")}<td class="wk-total">${num(w?.forecastAll)}</td></tr>
+      <tr><th class="rowh">Actual</th>${pts.map((p, i) => p?.actual != null
+        ? `<td class="s-${sts[i].status}-cell" data-tip="day" data-kpi="${esc(key)}" data-day="${days[i]}">${num(p.actual)}</td>`
+        : `<td class="na">${p?.forecast != null ? "no actual" : "—"}</td>`).join("")}
+        <td class="wk-total ${w?.actual != null ? `s-${wst.status}-cell` : "na"}" data-tip="period" data-kpi="${esc(key)}" data-from="${ws}" data-to="${ws + 6}">${w?.actual != null ? `${num(w.actual)} <span class="muted" style="font-weight:500">(${w.daysWithActual}/7 d)</span>` : "no actuals"}</td></tr>
+      <tr><th class="rowh">Delta</th>${sts.map(s => `<td class="${tone(s.delta)}">${signed(s.delta, num)}</td>`).join("")}<td class="wk-total ${tone(wDelta)}">${signed(wDelta, num)}</td></tr>
+      <tr><th class="rowh">Delta %</th>${sts.map(s => `<td class="${tone(s.deltaPct)}">${fmtPct(s.deltaPct, true)}</td>`).join("")}<td class="wk-total ${tone(wDelta)}">${fmtPct(w && w.actual != null ? w.attainment - 1 : null, true)}</td></tr>`;
+  }
+  el.innerHTML = `<table>
+    <thead><tr><th style="text-align:left"><span class="kpi-scope">${esc(ctx.label)}</span></th>
+      ${days.map(d => `<th class="dayh ${d === today ? "today" : ""}" data-day="${d}" title="Open ${fmtDay(d)}">${fmtDayShort(d)}</th>`).join("")}
+      <th>Week</th></tr></thead>
+    <tbody>${body}</tbody></table>
+    <div class="foot">The week's delta compares actuals with the forecast for the same days; the Forecast row shows the full week. Days without an actual are never counted as zero.</div>`;
+}
+
+// Hover card
+(() => {
+  const tip = document.getElementById("tip");
+  let current = null;
+  document.addEventListener("mouseover", e => {
+    const t = e.target.closest?.("[data-tip]");
+    if (t === current) return;
+    current = t;
+    if (!t) { tip.style.display = "none"; return; }
+    const html = tipHTML(t);
+    if (!html) { tip.style.display = "none"; return; }
+    tip.innerHTML = html;
+    tip.style.display = "block";
+  });
+  document.addEventListener("mousemove", e => {
+    if (tip.style.display !== "block") return;
+    const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = e.clientX + pad, y = e.clientY + pad;
+    if (x + w > window.innerWidth - 8) x = e.clientX - w - pad;
+    if (y + h > window.innerHeight - 8) y = e.clientY - h - pad;
+    tip.style.left = `${Math.max(8, x)}px`; tip.style.top = `${Math.max(8, y)}px`;
+  });
+  document.addEventListener("scroll", () => { tip.style.display = "none"; current = null; }, true);
+})();
 
 /* ---------- Weekly view ---------- */
 
@@ -2047,6 +2334,7 @@ function renderWeek() {
   $("#weekRange").textContent = `${fmtDayShort(ws)} – ${fmtDayShort(we)} ${endDate.getUTCFullYear()}`;
   $("#weekJump").value = dayToISO(state.cursor);
 
+  renderWeekKpi(ws);
   const rows = state.data.rows.filter(passes);
   const dated = rows.filter(r => r._start !== null && r._end !== null);
   // Each initiative lands in exactly one section.
