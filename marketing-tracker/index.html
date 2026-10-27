@@ -1572,6 +1572,17 @@ function applySourceConfig(src, resolved) {
   };
 }
 
+// Why a published-CSV response can't be used, or null if it can.
+// A restricted "Publish to web" link answers 401/403 or a Google sign-in page.
+const SIGN_IN_PROBLEM = "Google asked for a sign-in instead of returning the CSV. Publishing is restricted to signed-in people in your organisation, which the tracker can't use. Remove that restriction in File > Share > Publish to web (or ask your Workspace admin), or download the tabs as CSV and drop them on the page";
+function publishedCsvProblem(status, text) {
+  const isHtml = /^\s*<(!doctype|html)/i.test(text || "");
+  if (status === 401 || status === 403 || (isHtml && /sign in to access this content|accounts\.google\.com\/ServiceLogin/i.test(text))) return SIGN_IN_PROBLEM;
+  if (status >= 400) return `HTTP ${status} from Google Sheets`;
+  if (isHtml) return "got a web page instead of CSV. Use the 'Publish to web' CSV link";
+  return null;
+}
+
 /* ---------- Everything together ---------- */
 
 // Read a source's CSV once and decide what it is. Config type wins; otherwise
@@ -1753,7 +1764,8 @@ function render() {
   $("#emptyState").innerHTML = state.loading && !has
     ? `<h2>Loading the marketing plan…</h2><p>Fetching ${configuredSources().filter(c => c.url).length} tabs from Google Sheets.</p>`
     : allFailed
-    ? `<h2>Couldn't load the Google Sheets</h2><p>${esc(state.sources[0].loadError.replace(/^./, c => c.toUpperCase()))}. Check your connection and click Reload data, or drop CSV exports of the tabs here instead.</p>
+    ? `<h2>Couldn't load the Google Sheets</h2><p>${esc(state.sources[0].loadError.replace(/^./, c => c.toUpperCase()))}.</p>
+       <p>${state.sources[0].loadError === SIGN_IN_PROBLEM ? "Once the links are public, click Reload data." : "Check your connection and click Reload data, or drop CSV exports of the tabs here instead."}</p>
        <button data-action="reload">Reload data</button> <button class="primary" data-action="pick">Choose CSV files</button>`
     : `<h2>Load your marketing plan</h2><p>Drop the CSV exports here: the Seasonal Moments tab, one tab per vertical, and the KPI forecast.</p>
        <button class="primary" data-action="pick">Choose CSV files</button>`;
@@ -2522,14 +2534,15 @@ async function fetchUrlSource(c) {
   const base = { label: c.label || c.url, origin: "url", url: c.url };
   try {
     const res = await fetch(c.url, { cache: "no-store" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
-    if (/^\s*<(!doctype|html)/i.test(text)) throw new Error("got a web page instead of CSV. Use the 'Publish to web' CSV link.");
+    const problem = publishedCsvProblem(res.status, text);
+    if (problem) throw new Error(problem);
     return { ...base, text };
   } catch (e) {
-    // Browsers report network, CORS and blocked-host failures all as a TypeError.
+    // Browsers report network, CORS and blocked-host failures all as a TypeError,
+    // including a sign-in-restricted link (Google's sign-in page has no CORS headers).
     const msg = e instanceof TypeError
-      ? "couldn't reach Google Sheets (no connection, a blocked network, or the spreadsheet isn't published to the web)"
+      ? "couldn't read Google Sheets. Either there's no connection or the network blocks docs.google.com, or the spreadsheet isn't published to the web, or publishing is restricted to signed-in people in your organisation (open the tab's published link in a private window to check)"
       : e.message || String(e);
     return { ...base, text: "", loadError: msg };
   }

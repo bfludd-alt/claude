@@ -208,6 +208,10 @@ Things to know about publishing:
 - **Anyone with the published link can read every tab.** Check this is acceptable for plan and KPI data, and that your Workspace admin allows publishing.
 - **Google can take about 5 minutes** to reflect edits in the published CSV.
 - **Publish the entire document**, not a single tab. Otherwise the other tabs' links don't work.
+- **The links must be public, not restricted to your organisation.** In a Google Workspace account, the Publish to web dialog can restrict access to signed-in people in your organisation. Workspace admins can also force this on. A restricted link answers with a Google sign-in page, and the tracker can't use it: browsers don't send your Google sign-in with a page's requests to another site. The tracker then says Google asked for a sign-in.
+  - **To check:** open a tab's published link in a private window. You should see raw CSV, not a sign-in page.
+  - **To fix:** untick the restriction under **Published content & settings** in the publish dialog, or ask your admin to allow public publishing.
+  - **If public publishing isn't acceptable for this data,** download the tabs as CSV and drop them on the page instead (section 1).
 
 ### The CONFIG block
 

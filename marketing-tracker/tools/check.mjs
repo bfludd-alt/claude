@@ -22,7 +22,7 @@ const cfg = /<script>\s*(\/\*[\s\S]*?CONFIG[\s\S]*?)<\/script>/.exec(html);
 if (!cfg) throw new Error("CONFIG block not found in index.html");
 const CONFIG = new Function(`${cfg[1]}; return CONFIG;`)();
 const core = new Function(`${m[1]}; return { parseCSV, buildDataset, weekStart, dayToISO, parseISODate, parseDMYDate,
-  parseNumber, parseSlashDate, resolveConfigSource, applySourceConfig, kpiStatus, kpiPeriod, kpiPoint, kpiLatestActual, monthBounds, todayDay, fmtDay, fmtDayShort, fmtNum, fmtPct, fmtKpi, ISSUE_TYPES };`)();
+  parseNumber, parseSlashDate, resolveConfigSource, applySourceConfig, publishedCsvProblem, kpiStatus, kpiPeriod, kpiPoint, kpiLatestActual, monthBounds, todayDay, fmtDay, fmtDayShort, fmtNum, fmtPct, fmtKpi, ISSUE_TYPES };`)();
 const args = process.argv.slice(2);
 const flag = name => args.find(a => a.startsWith(`--${name}=`))?.split("=")[1];
 const today = flag("today") ? core.parseISODate(flag("today")) : core.todayDay();
@@ -108,8 +108,10 @@ if (args.includes("--live")) {
     const base = { label: c.label, origin: "url", url: c.url };
     try {
       const res = await fetch(c.url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return core.applySourceConfig({ ...base, text: await res.text() }, resolved);
+      const text = await res.text();
+      const problem = core.publishedCsvProblem(res.status, text);
+      if (problem) throw new Error(problem);
+      return core.applySourceConfig({ ...base, text }, resolved);
     } catch (e) { return { ...base, text: "", loadError: e.cause?.message || e.message }; }
   }));
 }
