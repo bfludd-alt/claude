@@ -10,7 +10,9 @@ You need edit access to the Marketing Tracker spreadsheet. Setup takes about 10 
 
 1. Open the **Marketing Tracker** spreadsheet.
 2. In the menu, click **Extensions → Apps Script**. A new browser tab opens with the script editor.
-3. At the top left, click **Untitled project** and rename it **Snoonu Marketing Tracker**.
+3. **Check whether the spreadsheet already has a script.**
+   - If the project is called **Untitled project** and `Code.gs` holds only an empty `function myFunction() {}`, it's new. Rename it **Snoonu Marketing Tracker** and carry on.
+   - If there's other code, more files, or anything under **Libraries** in the left sidebar, **stop**. Someone else's script lives here, and replacing `Code.gs` would delete it. Ask whoever maintains the tracker to set it up alongside that script instead.
 
 ## 2. Create two files and paste the code
 
@@ -18,7 +20,7 @@ The editor shows a file list on the left. It already has one file, **Code.gs**.
 
 **File 1: `Code.gs`**
 1. Click **Code.gs** in the file list.
-2. Select everything in the editor (Ctrl+A, or Cmd+A on a Mac) and delete it.
+2. Select everything in the editor (Ctrl+A, or Cmd+A on a Mac) and delete it. In a new project that's just the empty `myFunction`.
 3. Open [`apps-script/Code.gs`](Code.gs) from this repository, copy all of it, and paste it in.
 
 **File 2: `index`**
@@ -100,6 +102,12 @@ A completely blank page means the web app is serving an empty or out-of-date **i
 
    To test without versioning, **Deploy → Test deployments** gives a link that always runs the latest saved code.
 4. **Still blank? Try a private (incognito) window** signed in to only your Snoonu account. Apps Script web apps often show a blank page when the browser is signed in to several Google accounts at once, or when it blocks third-party cookies for `script.google.com` / `googleusercontent.com`.
+
+## "You do not have access to library …"
+
+The project lists a library, under **Libraries** in the editor's left sidebar, that your account can't open. The tracker's own code doesn't use any libraries.
+- **New project with only `Code.gs` and `index`:** hover over the library → **⋮ → Remove**. Then publish a new version (step 6).
+- **The project has other code that uses the library:** don't remove it. That code belongs to someone else. Ask the library's owner to share it with you, or set the tracker up as a separate project.
 
 ---
 
