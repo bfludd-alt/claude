@@ -1568,6 +1568,7 @@ function globToRegex(glob) {
 //   url      https://docs.google.com/spreadsheets/d/e/<publishedId>/pub?gid=<gid>&single=true&output=csv
 //   tabVertical  campaign tabs: the vertical named after the tab
 // Advanced overrides (url, editUrl, gid, file, vertical, statusMode) still win when given.
+const SHEETS_BASE = "https://docs.google.com/spreadsheets";
 function resolveConfigSource(c, publishedId) {
   const sheetUrl = c.sheetUrl || "";
   const sheetId = (/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/.exec(sheetUrl) || [])[1];
@@ -1576,8 +1577,10 @@ function resolveConfigSource(c, publishedId) {
     label: c.label,
     type: c.type,
     gid,
-    editUrl: c.editUrl || (sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : undefined),
-    url: c.url || (publishedId && gid != null ? `https://docs.google.com/spreadsheets/d/e/${publishedId}/pub?gid=${gid}&single=true&output=csv` : undefined),
+    // Plain string joins, not `template literals`: Apps Script strips "//" comments
+    // when serving the page and mistakes a "//" inside a template literal for one.
+    editUrl: c.editUrl || (sheetId ? SHEETS_BASE + "/d/" + sheetId + "/edit" : undefined),
+    url: c.url || (publishedId && gid != null ? SHEETS_BASE + "/d/e/" + publishedId + "/pub?gid=" + gid + "&single=true&output=csv" : undefined),
     file: c.file,
     tabVertical: c.type === "campaigns" ? canonicalVertical(c.vertical || c.label) || c.vertical || c.label : undefined,
     vertical: c.type === "kpi_engine" || c.type === "kpi" ? c.vertical : undefined,

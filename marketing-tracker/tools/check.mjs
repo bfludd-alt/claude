@@ -81,9 +81,46 @@ function parserTests() {
   eq("threshold red -5.1%", st(94.9, "threshold"), "red");
   eq("threshold over +5.1%", st(105.1, "threshold"), "over");
   eq("no actual", core.kpiStatus({ forecast: 100, bear: 93, bull: 110, actual: null }, def).status, "no_actual");
-  const extra = 3 + 3 + 9 + 4 + 8;
+  // Apps Script strips "//" comments when serving the page and mistakes a "//"
+  // inside a `template literal` for one, which breaks the script. Keep URLs in
+  // template literals out: use "quoted" strings and +.
+  const bad = templatesWithSlashes(html);
+  if (bad.length) { fails++; console.log(`  FAIL "//" inside a template literal (breaks in Apps Script) at index.html line${bad.length > 1 ? "s" : ""} ${bad.join(", ")}`); }
+  const extra = 3 + 3 + 9 + 4 + 8 + 1;
   console.log(fails ? `Self-tests: ${fails} FAILED` : `Self-tests: all ${cases.length + extra} passed`);
   return fails;
+}
+
+// Lines of index.html where a `template literal` contains "//". A small lexer:
+// tracks comments, quotes and template literals (with ${…} nesting).
+function templatesWithSlashes(page) {
+  const lines = [];
+  const re = /<script>([\s\S]*?)<\/script>/g;
+  let m;
+  while ((m = re.exec(page))) {
+    const js = m[1], base = page.slice(0, m.index).split("\n").length - 1;
+    const lineAt = i => base + js.slice(0, i).split("\n").length;
+    const stack = [];   // "`" for a template, "{" for a ${ } inside one
+    let i = 0;
+    while (i < js.length) {
+      const c = js[i], top = stack[stack.length - 1];
+      if (top === "`") {
+        if (c === "\\") { i += 2; continue; }
+        if (c === "`") { stack.pop(); i++; continue; }
+        if (c === "$" && js[i + 1] === "{") { stack.push("{"); i += 2; continue; }
+        if (c === "/" && js[i + 1] === "/") { lines.push(lineAt(i)); i += 2; continue; }
+        i++; continue;
+      }
+      if (c === "/" && js[i + 1] === "/") { i = js.indexOf("\n", i); if (i < 0) break; continue; }
+      if (c === "/" && js[i + 1] === "*") { i = js.indexOf("*/", i + 2) + 2; if (i < 2) break; continue; }
+      if (c === '"' || c === "'") { const q = c; i++; while (i < js.length && js[i] !== q && js[i] !== "\n") i += js[i] === "\\" ? 2 : 1; i++; continue; }
+      if (c === "`") { stack.push("`"); i++; continue; }
+      if (c === "{" && top === "{") { stack.push("{"); i++; continue; }
+      if (c === "}" && top === "{") { stack.pop(); i++; continue; }
+      i++;
+    }
+  }
+  return [...new Set(lines)];
 }
 
 /* ---------- Table printing ---------- */
