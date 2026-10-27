@@ -15,10 +15,40 @@
  * People then see data only if the spreadsheet is shared with them.
  */
 
-function doGet() {
+function doGet(e) {
+  // <web app URL>?check=1 shows a plain-text health check instead of the page.
+  if (e && e.parameter && e.parameter.check) {
+    return ContentService.createTextOutput(healthCheck_()).setMimeType(ContentService.MimeType.TEXT);
+  }
   return HtmlService.createHtmlOutputFromFile('index')
     .setTitle('Snoonu Marketing Tracker')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+// What the deployed version can see: the spreadsheet, its tabs, and whether the
+// "index" file holds the whole tracker page.
+function healthCheck_() {
+  var lines = ['Snoonu Marketing Tracker: health check', ''];
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    lines.push('Spreadsheet: ' + ss.getName());
+    ss.getSheets().forEach(function (sheet) {
+      lines.push('  tab "' + sheet.getName() + '" (gid ' + sheet.getSheetId() + '): ' + Math.max(0, sheet.getLastRow() - 1) + ' rows below the header');
+    });
+  } catch (err) {
+    lines.push('Could not open the spreadsheet: ' + err.message);
+  }
+  lines.push('');
+  try {
+    var html = HtmlService.createHtmlOutputFromFile('index').getContent();
+    var problems = [];
+    if (html.indexOf('CORE:BEGIN') < 0) problems.push('it does not contain the tracker code: paste the whole of index.html into it');
+    if (!/<\/html>\s*$/i.test(html)) problems.push('it does not end with </html>: the paste looks cut short');
+    lines.push('index file: ' + html.length + ' characters' + (problems.length ? '. PROBLEM: ' + problems.join('; ') : ', looks complete'));
+  } catch (err) {
+    lines.push('index file: ' + err.message);
+  }
+  return lines.join('\n');
 }
 
 // Finds a tab by name: exact match first, then ignoring case, spaces and

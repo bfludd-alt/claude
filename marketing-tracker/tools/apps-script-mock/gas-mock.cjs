@@ -24,9 +24,10 @@ function parseCSV(text) {   // same rules as the tracker's parser
 }
 
 // tabs: [{ name, gid, csvPath }]
-function makeRuntime(tabs, { url = "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit", name = "Marketing Tracker" } = {}) {
+function makeRuntime(tabs, { indexContent = fs.readFileSync(path.join(__dirname, "../../index.html"), "utf8"), url = "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit", name = "Marketing Tracker" } = {}) {
   const data = tabs.map(t => ({ ...t, values: parseCSV(fs.readFileSync(t.csvPath, "utf8")) }));
-  const sheet = t => ({ getName: () => t.name, getSheetId: () => t.gid, getDataRange: () => ({ getDisplayValues: () => t.values.map(r => r.slice()) }) });
+  const sheet = t => ({ getName: () => t.name, getSheetId: () => t.gid, getDataRange: () => ({ getDisplayValues: () => t.values.map(r => r.slice()) }),
+    getLastRow: () => t.values.reduce((last, r, i) => (r.some(c => c !== "") ? i + 1 : last), 0) });
   const ss = {
     getSheetByName: n => { const t = data.find(x => x.name === n); return t ? sheet(t) : null; },
     getSheets: () => data.map(sheet), getUrl: () => url, getName: () => name,
@@ -34,7 +35,8 @@ function makeRuntime(tabs, { url = "https://docs.google.com/spreadsheets/d/1OaZG
   const html = { title: null };
   const ctx = {
     SpreadsheetApp: { getActiveSpreadsheet: () => ss },
-    HtmlService: { createHtmlOutputFromFile: file => { html.file = file; const out = { setTitle: t => { html.title = t; return out; }, addMetaTag: (k, v) => { html[k] = v; return out; } }; return out; } },
+    HtmlService: { createHtmlOutputFromFile: file => { html.file = file; const out = { setTitle: t => { html.title = t; return out; }, addMetaTag: (k, v) => { html[k] = v; return out; }, getContent: () => indexContent }; return out; } },
+    ContentService: { MimeType: { TEXT: "text/plain" }, createTextOutput: text => ({ text, setMimeType() { return this; } }) },
   };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(__dirname, "../../apps-script/Code.gs"), "utf8"), ctx);

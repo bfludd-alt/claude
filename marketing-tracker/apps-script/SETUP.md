@@ -86,6 +86,23 @@ The Web app URL stays the same, so everyone's link keeps working.
 
 ---
 
+## If the page is blank
+
+A completely blank page means the web app is serving an empty or out-of-date **index** file. A script problem would still show the "Marketing Tracker" header, and would now show a red error message too.
+
+1. **Run the health check.** Open the web app URL with `?check=1` added to the end, e.g. `https://script.google.com/macros/s/…/exec?check=1`. It shows plain text:
+   - the spreadsheet's tabs, with their row counts
+   - a line about the **index** file. It should say about 185,000 characters, "looks complete". A **PROBLEM** there tells you what's wrong.
+
+   If `?check=1` is also blank, or says "Script function not found", the deployment is running old code. Go to step 3.
+2. **Check the index file in the editor.** It should start with `<!doctype html>`, end with `</html>`, and be about 3,100 lines long. If it's the short starter file Apps Script created, or ends early, select all, paste `index.html` again, and **Save**. No dot should remain next to the file name.
+3. **Push the saved code to the link.** A deployment keeps the code as it was when you deployed it. Saving afterwards doesn't change what the link shows until you publish a new version: **Deploy → Manage deployments → ✎ Edit → Version: New version → Deploy.**
+
+   To test without versioning, **Deploy → Test deployments** gives a link that always runs the latest saved code.
+4. **Still blank? Try a private (incognito) window** signed in to only your Snoonu account. Apps Script web apps often show a blank page when the browser is signed in to several Google accounts at once, or when it blocks third-party cookies for `script.google.com` / `googleusercontent.com`.
+
+---
+
 ## Stop publishing the spreadsheet to the web
 
 The web app reads the tabs directly, so the old "Publish to web" link isn't needed:

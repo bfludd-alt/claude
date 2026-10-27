@@ -5,6 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Marketing Tracker</title>
 <script>
+// Show script errors on the page instead of failing silently (the Apps Script
+// web app has no visible console). Kept tiny and first, so it runs even if a
+// later script is broken.
+window.addEventListener("error", function (e) {
+  var show = function () {
+    var box = document.getElementById("scriptError") || document.body.insertBefore(document.createElement("div"), document.body.firstChild);
+    box.id = "scriptError";
+    box.style.cssText = "background:#fdecec;color:#8f1d1d;border:1px solid #c62828;padding:10px 14px;margin:8px;border-radius:6px;font:13px/1.4 sans-serif";
+    box.textContent = "The tracker hit a script error, so parts of the page may be missing: " + (e.message || e.error || "unknown error") + (e.lineno ? " (line " + e.lineno + ")" : "") + ". Send this message to whoever maintains the tracker.";
+  };
+  document.body ? show() : document.addEventListener("DOMContentLoaded", show);
+});
+</script>
+<script>
 /* ============================================================
    CONFIG — edit this block to point the tracker at your data.
    ============================================================
