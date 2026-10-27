@@ -23,12 +23,19 @@
    Everything else is worked out from these: each tab's published CSV link,
    the "Edit in sheet" links, and the vertical of each campaign tab.
 
-   mode         "urls"  (default) load every tab from Google Sheets on open.
-                "local" start empty and load dropped CSV files instead.
-                Dropping CSV files on the page works in both modes.
+   mode         How the page loads data when it is NOT running as the Apps Script
+                web app (inside Apps Script it always reads the tabs directly):
+                "local" (default) start with the drop zone; drop CSV exports.
+                "urls"  fetch each tab's "Publish to web" CSV link.
+                Dropping CSV files on the page works in every mode.
+
+   In the Apps Script web app only `label` and `type` are used: tabs are found
+   by name and the edit links come from the spreadsheet itself. `sheetUrl` and
+   `publishedId` are only needed for the "urls" mode and for edit links on
+   dropped files.
 */
 const CONFIG = {
-  mode: "urls",
+  mode: "local",
   publishedId: "2PACX-1vTBY2uU0M5EwJeEiWFK2y06GTMz881OKAonyKdnk3oT0qR7JbU07h4BoKEuLzHIMpn4KkrTH4e3eH4k",
   sources: [
     { label: "Seasonal Moments", type: "moments",    sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=680008376#gid=680008376" },
@@ -564,6 +571,13 @@ tr.is-dismissed td, .issue.is-dismissed { opacity: .7; }
 .tint.t-amber { background: rgba(224, 138, 0, .12); }
 .tint.t-red { background: rgba(198, 40, 40, .13); }
 
+.dialog { position: fixed; z-index: 45; left: 50%; top: 10vh; transform: translateX(-50%); width: min(640px, calc(100vw - 32px)); background: var(--surface); border-radius: 10px; box-shadow: 0 12px 40px rgba(16,24,40,.25); padding: 16px 18px; }
+.dialog h3 { margin: 0 0 6px; font-size: 16px; }
+.dialog p { margin: 0 0 10px; color: var(--text-2); font-size: 13px; }
+.dialog textarea { width: 100%; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; border: 1px solid var(--border-strong); border-radius: 6px; padding: 8px; resize: vertical; }
+.dialog-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.dialog-actions .spacer { flex: 1; }
+
 .placeholder { padding: 40px; text-align: center; color: var(--text-2); }
 .hidden { display: none !important; }
 </style>
@@ -669,6 +683,7 @@ tr.is-dismissed td, .issue.is-dismissed { opacity: .7; }
 
 <div id="panelRoot"></div>
 <div id="tip" role="tooltip"></div>
+<div id="dialogRoot"></div>
 
 <script>
 /* CORE:BEGIN — pure data logic, no DOM. tools/check.mjs runs this block in Node. */
@@ -1554,6 +1569,7 @@ function resolveConfigSource(c, publishedId) {
 // and "s_market.csv" both match "S Market". The longest matching name wins.
 function configForSource(src, resolved) {
   if (src.origin === "url") return resolved.find(c => c.url && c.url === src.url) || null;
+  if (src.origin === "appsScript") return resolved.find(c => c.label === src.label) || null;
   const base = src.label.replace(/\.csv$/i, "");
   const name = normName(base.includes(" - ") ? base.split(" - ").pop() : base);
   const hits = resolved.filter(c => (c.file ? globToRegex(c.file).test(src.label) : normName(c.label) && name.includes(normName(c.label))));
@@ -1590,7 +1606,10 @@ function publishedCsvProblem(status, text) {
 function classifySource(src) {
   // A source that failed to load is reported by the plan step ("Could not load").
   if (src.loadError) return { ...src, _fileType: "plan", _records: [] };
-  const { records, unterminated } = parseCSV(src.text || "");
+  // Apps Script hands over the tab's display values as a 2D array: same pipeline, no CSV step.
+  const { records, unterminated } = src.records
+    ? { records: src.records.map(row => row.map(v => (v == null ? "" : String(v)))), unterminated: false }
+    : parseCSV(src.text || "");
   let fileType = detectFileType(records);
   if (src.type === "moments" || src.type === "campaigns") fileType = "plan";
   else if (src.type === "kpi_engine") fileType = "kpi_engine";
@@ -1641,6 +1660,12 @@ function buildDataset(sources, options = {}) {
 
 <script>
 /* ================= UI ================= */
+
+// Inside the Apps Script web app, google.script.run reads the tabs server-side.
+const IN_APPS_SCRIPT = typeof google !== "undefined" && !!(google.script && google.script.run);
+const MODE = IN_APPS_SCRIPT ? "appsScript" : CONFIG.mode === "appsScript" ? "local" : CONFIG.mode;
+// Storage can be blocked (e.g. in the Apps Script iframe). Everything that uses it must cope.
+const STORAGE_OK = (() => { try { const k = "marketingTracker.probe"; localStorage.setItem(k, k); localStorage.removeItem(k); return true; } catch { return false; } })();
 
 const STORAGE_KEY = "marketingTracker.localSources.v1";
 const VERTICAL_VAR = {
@@ -1713,7 +1738,7 @@ async function addFiles(fileList, handles = new Map()) {
     const i = state.sources.findIndex(x => x.label === s.label);
     if (i >= 0) state.sources[i] = s; else state.sources.push(s);
   }
-  if (CONFIG.mode === "local") storageSet(state.sources.filter(s => s.origin === "file" && !s.loadError).map(({ label, text }) => ({ label, text })));
+  if (MODE === "local") storageSet(state.sources.filter(s => s.origin === "file" && !s.loadError).map(({ label, text }) => ({ label, text })));
   rebuild();
 }
 
@@ -1738,7 +1763,17 @@ function clearData() {
 /* ---------- Config matching ---------- */
 
 // CONFIG.sources resolved into urls, edit links and verticals (see resolveConfigSource).
-const configuredSources = () => CONFIG.sources.map(c => resolveConfigSource(c, CONFIG.publishedId));
+// In the Apps Script web app the edit link and each tab's gid come from the spreadsheet itself.
+const configuredSources = () => CONFIG.sources.map(c => {
+  const r = resolveConfigSource(c, CONFIG.publishedId);
+  const info = state.sheetInfo;
+  if (info) {
+    r.editUrl = (/^(.*?\/edit)/.exec(info.url) || [])[1] || info.url.replace(/[?#].*$/, "");
+    const tab = info.tabs.find(t => normName(t.name) === normName(c.label));
+    if (tab) r.gid = String(tab.gid);
+  }
+  return r;
+});
 const configFor = src => configForSource(src, configuredSources());
 // Source as handed to the core: type, vertical and status mode from its config entry.
 const withConfig = src => applySourceConfig(src, configuredSources());
@@ -1762,10 +1797,10 @@ function render() {
   const allFailed = has && state.sources.every(s => s.loadError);
   $("#emptyState").classList.toggle("hidden", has && !allFailed);
   $("#emptyState").innerHTML = state.loading && !has
-    ? `<h2>Loading the marketing plan…</h2><p>Fetching ${configuredSources().filter(c => c.url).length} tabs from Google Sheets.</p>`
+    ? `<h2>Loading the marketing plan…</h2><p>Reading ${MODE === "appsScript" ? CONFIG.sources.length : configuredSources().filter(c => c.url).length} tabs from Google Sheets.</p>`
     : allFailed
     ? `<h2>Couldn't load the Google Sheets</h2><p>${esc(state.sources[0].loadError.replace(/^./, c => c.toUpperCase()))}.</p>
-       <p>${state.sources[0].loadError === SIGN_IN_PROBLEM ? "Once the links are public, click Reload data." : "Check your connection and click Reload data, or drop CSV exports of the tabs here instead."}</p>
+       <p>${state.sources[0].loadError === SIGN_IN_PROBLEM ? "Once the links are public, click Reload data." : MODE === "appsScript" ? "Click Reload data to try again, or drop CSV exports of the tabs here instead." : "Check your connection and click Reload data, or drop CSV exports of the tabs here instead."}</p>
        <button data-action="reload">Reload data</button> <button class="primary" data-action="pick">Choose CSV files</button>`
     : `<h2>Load your marketing plan</h2><p>Drop the CSV exports here: the Seasonal Moments tab, one tab per vertical, and the KPI forecast.</p>
        <button class="primary" data-action="pick">Choose CSV files</button>`;
@@ -2009,8 +2044,8 @@ function renderMonth() {
 
 function renderLoaderBar() {
   const bits = [];
-  if (state.sources.length || CONFIG.mode === "urls") bits.push(`<button data-action="reload" title="Fetch every sheet again (or re-read the files) and keep the current view">Reload data</button>`);
-  bits.push(`<button data-action="pick">${CONFIG.mode === "urls" ? "Add CSV files" : "Add or replace files"}</button>`);
+  if (state.sources.length || MODE !== "local") bits.push(`<button data-action="reload" title="Read every tab again (or re-read the files) and keep the current view">Reload data</button>`);
+  bits.push(`<button data-action="pick">${MODE === "local" ? "Add or replace files" : "Add CSV files"}</button>`);
   bits.push(sheetsMenuHTML());
   if (state.sources.some(s => s.origin === "file")) bits.push(`<button data-action="clear">Clear data</button>`);
   $("#loaderBar").innerHTML = bits.join("");
@@ -2031,7 +2066,7 @@ function renderSources() {
       <thead><tr><th>Source</th><th>Type</th><th class="num">Rows</th><th>Errors</th><th>Warnings</th><th>Notes</th></tr></thead>
       <tbody>${sources.map(s => `
         <tr>
-          <td><strong>${esc(s.label)}</strong> <span class="faint">${s.origin === "url" ? "· sheet URL" : "· local file"}</span></td>
+          <td><strong>${esc(s.label)}</strong> <span class="faint">${{ url: "· published link", appsScript: "· Google Sheet tab" }[s.origin] || "· local file"}</span></td>
           <td>${s.loadError ? "" : `<span class="kind-tag">${KIND_LABELS[s.kind] || s.kind}${s.vertical ? ` · ${esc(s.vertical)}` : ""}</span>`}</td>
           <td class="num">${s.rowCount}${s.kind === "kpi_engine" ? " days" : ""}</td>
           <td>${countChip(activeIssues(state.data.issues).filter(i => i.sourceIdx === s.sourceIdx && i.severity === "error").length, "error")}</td>
@@ -2082,7 +2117,9 @@ function renderIssues() {
         </tbody></table>` : ""}
       ${stale ? `<div class="empty-note">Stale dismissals are kept in case the data changes back. <button class="link" data-action="clean-dismissals">Remove the ${stale} that no longer match</button></div>` : ""}
     </details>` : "";
-  $("#issuesBody").innerHTML = main + dismissedBox;
+  const storageNote = !STORAGE_OK && state.dismissals.size
+    ? `<div class="empty-note">Browser storage isn't available here, so dismissals last until you close the page. Use <strong>Export dismissals</strong> to keep them.</div>` : "";
+  $("#issuesBody").innerHTML = main + storageNote + dismissedBox;
   const input = $("#dismissNote");
   if (input) input.focus();
 }
@@ -2520,7 +2557,7 @@ const handleStore = {
 };
 
 async function pickFiles() {
-  if (!window.showOpenFilePicker) { $("#filePicker").click(); return; }
+  if (!window.showOpenFilePicker || window.top !== window) { $("#filePicker").click(); return; }
   try {
     const handles = await window.showOpenFilePicker({ multiple: true, types: [{ description: "CSV or dismissals JSON", accept: { "text/csv": [".csv"], "application/json": [".json"] } }] });
     const files = await Promise.all(handles.map(h => h.getFile()));
@@ -2548,11 +2585,49 @@ async function fetchUrlSource(c) {
   }
 }
 
+// google.script.run as a promise.
+function callServer(fn, ...args) {
+  return new Promise((resolve, reject) =>
+    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fn](...args));
+}
+// Every configured tab, read server-side in one round trip. A missing tab
+// becomes a "Tab not found" source instead of failing the whole load.
+async function fetchAppsScriptSources() {
+  const labels = CONFIG.sources.map(c => c.label);
+  try {
+    const { info, tabs } = await callServer("loadTracker", labels);
+    state.sheetInfo = info;
+    return labels.map(label => {
+      const t = tabs.find(x => x.name === label);
+      if (!t || !t.found) {
+        return { label, origin: "appsScript", records: [],
+          loadError: `Tab not found: there's no tab called "${label}" in "${info.name}". Rename the tab, or update its label in CONFIG. Tabs in the spreadsheet: ${info.tabs.map(x => x.name).join(", ")}` };
+      }
+      return { label, origin: "appsScript", records: t.values };
+    });
+  } catch (e) {
+    const msg = String(e && e.message || e);
+    const loadError = /permission|access|authori[sz]/i.test(msg)
+      ? `You don't have access to the Marketing Tracker spreadsheet (${msg}). Ask its owner to share it with you, then reload`
+      : `Couldn't read the spreadsheet: ${msg}`;
+    return labels.map(label => ({ label, origin: "appsScript", records: [], loadError }));
+  }
+}
+async function loadFromAppsScript() {
+  state.loading = true;
+  render();
+  const tabs = await fetchAppsScriptSources();
+  state.loading = false;
+  state.sources = [...tabs, ...state.sources.filter(s => s.origin === "file")];
+  rebuild();
+}
+
 // Re-fetch every URL source and re-read every remembered file. View, period,
 // filters and the open panel stay as they are.
 async function reloadData() {
   notice("Reloading…", true);
-  const urlSources = CONFIG.mode === "urls" ? await Promise.all(configuredSources().filter(c => c.url).map(fetchUrlSource)) : [];
+  const urlSources = MODE === "urls" ? await Promise.all(configuredSources().filter(c => c.url).map(fetchUrlSource))
+    : MODE === "appsScript" ? await fetchAppsScriptSources() : [];
   const missing = [];
   let reread = 0;
   const files = await Promise.all(state.sources.filter(s => s.origin === "file").map(async s => {
@@ -2569,10 +2644,10 @@ async function reloadData() {
     }
   }));
   state.sources = [...urlSources, ...files];
-  if (CONFIG.mode === "local") storageSet(state.sources.filter(s => s.origin === "file" && !s.loadError).map(({ label, text }) => ({ label, text })));
+  if (MODE === "local") storageSet(state.sources.filter(s => s.origin === "file" && !s.loadError).map(({ label, text }) => ({ label, text })));
   rebuild();
   const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const done = [urlSources.length ? `${urlSources.length} sheet${urlSources.length === 1 ? "" : "s"}` : "", reread ? `${reread} file${reread === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ");
+  const done = [urlSources.length ? `${urlSources.length} tab${urlSources.length === 1 ? "" : "s"}` : "", reread ? `${reread} file${reread === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ");
   notice(`${done ? `Reloaded ${done} at ${time}.` : ""}${missing.length
     ? ` ${missing.length === 1 ? "This file" : "These files"} can't be re-read automatically in this browser: ${missing.map(esc).join(", ")}. <button data-action="pick">Choose ${missing.length === 1 ? "it" : "them"} again</button>`
     : ""}`, missing.length > 0);
@@ -2719,20 +2794,54 @@ function cleanStaleDismissals() {
   saveDismissals(); render();
 }
 
-function exportDismissals() {
-  const payload = {
+function dismissalsJSON() {
+  return JSON.stringify({
     type: "marketing-tracker-dismissals", version: 1, exportedAt: new Date().toISOString(),
     dismissals: [...state.dismissals].map(([fingerprint, d]) => ({ fingerprint, ...d })),
-  };
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
-  a.download = `tracker-dismissals-${dayToISO(todayDay())}.json`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }, null, 2);
+}
+// Export and import go through a dialog with the JSON as text, so they still
+// work where downloads or storage are blocked (e.g. inside Apps Script).
+function exportDismissals() {
+  dialog(`<h3>Export dismissals</h3>
+    <p>${state.dismissals.size} dismissal${state.dismissals.size === 1 ? "" : "s"}. Save them as a <span class="mono">.json</span> file, or copy the text and send it to the team.</p>
+    <textarea id="dismissText" readonly rows="12">${esc(dismissalsJSON())}</textarea>
+    <div class="dialog-actions"><button class="primary" data-action="dismiss-download">Download .json</button>
+      <button data-action="dismiss-copy">Copy text</button><span class="spacer"></span><button data-action="close-dialog">Close</button></div>`);
+}
+function downloadDismissals() {
+  try {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([dismissalsJSON()], { type: "application/json" }));
+    a.download = `tracker-dismissals-${dayToISO(todayDay())}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    notice("If no download started, use Copy text and save it as a .json file.");
+  } catch { notice("Downloads are blocked here. Use Copy text instead.", true); }
+}
+async function copyDismissals() {
+  const ta = $("#dismissText");
+  ta.select();
+  try { await navigator.clipboard.writeText(ta.value); notice("Copied."); }
+  catch { try { document.execCommand("copy"); notice("Copied."); } catch { notice("Select the text and copy it with Ctrl/Cmd+C.", true); } }
+}
+function openImportDialog() {
+  dialog(`<h3>Import dismissals</h3>
+    <p>Choose a dismissals <span class="mono">.json</span> file, or paste its text below. Imported dismissals are added to yours.</p>
+    <p><button data-action="dismiss-import-file">Choose file…</button></p>
+    <textarea id="importText" rows="10" placeholder="Paste exported dismissals here"></textarea>
+    <div class="dialog-actions"><button class="primary" data-action="dismiss-import-text">Import pasted text</button><span class="spacer"></span><button data-action="close-dialog">Close</button></div>`);
+}
+function dialog(html) {
+  $("#dialogRoot").innerHTML = html ? `<div class="panel-backdrop" data-action="close-dialog"></div><div class="dialog" role="dialog" aria-modal="true">${html}</div>` : "";
 }
 async function importDismissals(file) {
+  return importDismissalsText(await file.text(), file.name);
+}
+function importDismissalsText(text, name = "pasted text") {
+  const file = { name };
   try {
-    const data = JSON.parse(await file.text());
+    const data = JSON.parse(text);
     if (data?.type !== "marketing-tracker-dismissals" || !Array.isArray(data.dismissals)) throw new Error("not a dismissals file");
     let added = 0;
     for (const d of data.dismissals) {
@@ -2744,6 +2853,7 @@ async function importDismissals(file) {
     saveDismissals();
     render();
     const matching = data.dismissals.filter(d => state.data.issues.some(i => i.fingerprint === d.fingerprint)).length;
+    dialog("");
     notice(`Imported ${data.dismissals.length} dismissal${data.dismissals.length === 1 ? "" : "s"} from ${esc(file.name)} (${added} new; ${matching} match current issues).`);
   } catch (e) {
     notice(`Couldn't import ${esc(file.name)}: ${esc(e.message)}. Expected a file made with Export dismissals.`, true);
@@ -3043,7 +3153,12 @@ document.addEventListener("click", e => {
   else if (a === "restore") restoreIssue(t.dataset.fp);
   else if (a === "clean-dismissals") cleanStaleDismissals();
   else if (a === "export-dismissals") exportDismissals();
-  else if (a === "import-dismissals") $("#dismissImport").click();
+  else if (a === "import-dismissals") openImportDialog();
+  else if (a === "dismiss-import-file") $("#dismissImport").click();
+  else if (a === "dismiss-import-text") importDismissalsText($("#importText").value);
+  else if (a === "dismiss-download") downloadDismissals();
+  else if (a === "dismiss-copy") copyDismissals();
+  else if (a === "close-dialog") dialog("");
   else if (t.dataset.action === "today") { state.cursor = todayDay(); render(); }
   else if (t.dataset.action === "close-panel") closePanel();
   else if (t.dataset.action === "locate") locate(t.dataset.key);
@@ -3081,7 +3196,11 @@ $("#weekJump").addEventListener("change", e => {
   if (d !== null) { state.cursor = d; render(); }
 });
 $("#paperSize").addEventListener("change", applyPaperSize);
-document.addEventListener("keydown", e => { if (e.key === "Escape" && (state.panelKey || state.panelDay != null)) closePanel(); });
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  if ($("#dialogRoot").innerHTML) dialog("");
+  else if (state.panelKey || state.panelDay != null) closePanel();
+});
 $("#monthJump").addEventListener("change", e => {
   const [y, m] = (e.target.value || "").split("-").map(Number);
   if (y && m) { state.cursor = dayFromYMD(y, m - 1, 1); render(); }
@@ -3121,7 +3240,9 @@ try { const paper = localStorage.getItem("marketingTracker.paper"); if (paper) $
 applyPaperSize();
 handleStore.all().then(h => { state.handles = h; });
 
-if (CONFIG.mode === "urls") {
+if (MODE === "appsScript") {
+  loadFromAppsScript();
+} else if (MODE === "urls") {
   render();
   loadUrls();
 } else {

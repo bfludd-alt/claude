@@ -13,6 +13,8 @@ One page that shows all marketing activity by month and by week, across three ti
 ```
 marketing-tracker/
   index.html                       the tracker (the CONFIG block at the top is the only part you edit)
+  apps-script/Code.gs              server side of the Apps Script web app (reads the tabs)
+  apps-script/SETUP.md             step-by-step setup of the web app, for non-developers
   tracker_template.xlsx            template for a vertical's sheet
   seasonal_moments_template.xlsx   template for the shared moments sheet
   sample-data/                     example files: moments, S Market, the engine export, a long-format KPI file
@@ -23,17 +25,19 @@ marketing-tracker/
 
 ## 1. Open the tracker
 
-1. Double-click `index.html`. It opens in your browser (Chrome, Edge, Safari or Firefox).
-2. It loads every tab straight from Google Sheets. "Loaded sources" lists each tab with its row count and issues.
-3. After editing a sheet, click **Reload data** (section 7).
+**Normal use: the web app link.** The tracker runs as a Google Apps Script web app inside the Marketing Tracker spreadsheet. Setup is in [`apps-script/SETUP.md`](apps-script/SETUP.md).
+- **Opening it:** anyone in Snoonu's Workspace who has access to the spreadsheet opens the link. The tracker reads every tab directly, in one round trip.
+- **Nothing is published to the web.**
+- **"Loaded sources"** lists each tab with its row count and issues. A tab whose name doesn't match a label in CONFIG shows **Tab not found**.
+- **After editing the sheet,** click **Reload data** (section 7).
 
-**If Google Sheets can't be reached** (offline, or a network that blocks `docs.google.com`), the page says so and offers a drop zone instead.
+**Offline or outside the web app:** double-click `index.html`. It opens on a drop zone.
 - Download the tabs as CSV (**File → Download → Comma-separated values**, one tab at a time) and drop them on the page.
 - Google names each download `<spreadsheet> - <tab>.csv`. The tracker matches that tab name to the config, so edit links still work.
-- Dropping files works any time: a file replaces the tab it matches, and a new engine export replaces the previous one even if its name differs.
+- Dropping files works in the web app too. A file replaces the tab it matches, and a new engine export replaces the previous one even if its name differs.
 - Dropped files stay on your computer. Nothing is uploaded.
 
-> Offline demo: set `mode: "local"` in CONFIG and drop the files from `sample-data/` onto the page.
+> Demo: drop the files from `sample-data/` onto the page.
 
 ---
 
@@ -194,7 +198,17 @@ In the CONFIG block (`kpiDefinitions`). Add more KPIs here later:
 
 ## 6. Connect the tracker to the spreadsheet (CONFIG)
 
-### Publish the spreadsheet (one time)
+### How data gets in
+
+| Where the page runs | Mode | What it does |
+|---|---|---|
+| Apps Script web app | `appsScript` (automatic) | `Code.gs` reads the tabs server-side with `getDisplayValues()`, so dates and percentages arrive exactly as shown in the sheet. Edit links and tab ids come from the spreadsheet itself. Only each source's `label` and `type` are used |
+| Opened from disk | `local` (CONFIG default) | Drop zone; drop CSV exports |
+| Opened from disk | `urls` | Fetches each tab's Publish-to-web CSV link (below). Not used at Snoonu, because Workspace policy restricts published links |
+
+Inside the web app, the page detects `google.script.run` and always uses `appsScript`. The CONFIG `mode` only applies outside it.
+
+### Publish to web (only for `mode: "urls"`; not used at Snoonu)
 
 **File → Share → Publish to web → Link → Entire document → Comma-separated values (.csv) → Publish.** Copy the link. It looks like:
 
@@ -219,7 +233,7 @@ At the top of `index.html`. Each tab needs only its **label**, **type** and **sh
 
 ```js
 const CONFIG = {
-  mode: "urls",
+  mode: "local",
   publishedId: "2PACX-1vTBY2uU0M5EwJeEiWFK2y06GTMz881OKAonyKdnk3oT0qR7JbU07h4BoKEuLzHIMpn4KkrTH4e3eH4k",
   sources: [
     { label: "Seasonal Moments", type: "moments",    sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZ…JYlrYmJI/edit?gid=680008376#gid=680008376" },
@@ -248,11 +262,11 @@ const CONFIG = {
 
 **Optional overrides:** `vertical` (KPI tabs beyond Layer 1) and `statusMode` (`"threshold"`). Rarely needed: `url`, `editUrl`, `gid`, or a `file` pattern for dropped files.
 
-**`mode`:**
-- `"urls"` (the default): load every tab from Google Sheets on open.
-- `"local"`: start with the drop zone instead.
+**`mode`** (outside the web app only):
+- `"local"` (the default): start with the drop zone.
+- `"urls"`: load every tab from its published link.
 
-Either way, dropping CSV files on the page works.
+Inside the web app the tracker always reads the tabs directly. Dropping CSV files works everywhere.
 
 **Opening the page from disk:** this usually works, because Google normally lets any page read published CSVs. If your browser refuses (the tracker then says it couldn't reach Google Sheets, while the published link opens fine on its own), host `index.html` on an internal site, or run `python3 -m http.server` in this folder and open http://localhost:8000.
 
@@ -271,12 +285,15 @@ The tracker never changes your data. To fix or update something:
 3. Come back and click **Reload data**. Your view, month or week, filters and open panel stay put.
 
 **How Reload data gets the new data**
-- **From Google Sheets** (the default): it fetches every tab again. Allow about 5 minutes for Google to republish.
+- **In the web app:** it reads every tab again, straight from the spreadsheet, so edits show at once.
+- **Published links (`urls` mode):** it fetches every tab again. Allow about 5 minutes for Google to republish.
 - **Local files:** download the new CSV and drop it on the page, which replaces the old one. In **Chrome and Edge**, files you picked with **Add or replace files** or dropped on the page are remembered, so **Reload data** re-reads them from disk in one click (the browser may ask permission once). Other browsers say which files to choose again.
 
   Re-reading remembered files couldn't be tested here, because the headless test browser can't use the real file picker. Check it once in Chrome or Edge.
 
-**Edit links come from each tab's `sheetUrl`** (section 6). Dropped files get them too, when their name contains the tab's label.
+**Where edit links come from:**
+- **In the web app:** from the spreadsheet itself.
+- **Elsewhere:** from each tab's `sheetUrl` (section 6). Dropped files get them too, when their name contains the tab's label.
 
 **When the button is greyed out:** the source isn't in the config, or a dropped file's name doesn't contain a tab label. Hover the button for the reminder.
 
@@ -380,11 +397,11 @@ The **Data issues** list names the file and the sheet row (the header is row 1; 
 - **How a dismissal is matched:** it's tied to the issue type, the row's id (or the date, for KPI issues), and the values that caused it.
   - Change the data and the issue comes back on its own.
   - Dismissals that no longer match anything are kept in case the data changes back. Use **Remove the N that no longer match** to clear them.
-- **Where they're saved:** in this browser only. If browser storage is blocked, they last until the page closes.
+- **Where they're saved:** in this browser only. If browser storage is blocked, which can happen inside the web app, they last until the page closes, and the issues panel says so.
 
 **Sharing one set with the team:**
-1. Click **Export dismissals** to download a JSON file.
-2. Others click **Import dismissals**, or drop the `.json` on the page. Imported dismissals merge with their own.
+1. Click **Export dismissals**. A dialog shows the JSON with **Download .json** and **Copy text**. Copy text works even where downloads are blocked.
+2. Others click **Import dismissals** and choose the file or paste the text, or drop the `.json` on the page. Imported dismissals merge with their own.
 
 ---
 
@@ -414,4 +431,5 @@ If the colours come out blank, tick **Background graphics** in the print dialog'
   - It prints loaded sources, data issues and a KPI month summary.
   - Options: `--live` (fetch every tab in CONFIG from Google Sheets), `--month=2026-10`, `--today=2026-10-26`, `--rows` (print every plan row) and `--test` (parser, date, KPI status and config self-tests).
   - `tools/fixtures/` holds deliberately broken files that trigger every validation rule, including the KPI checks.
+- **`tools/apps-script-mock/gas-mock.cjs`** runs the real `apps-script/Code.gs` in Node against a fake spreadsheet. It also provides a `google.script.run` stand-in for the page, so `appsScript` mode can be tested locally.
 - **`python3 tools/build_templates.py`** regenerates both `.xlsx` templates. It needs `openpyxl`. Its allowed values must match `ALLOWED` in `index.html`.
