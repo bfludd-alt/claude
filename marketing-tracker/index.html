@@ -8,14 +8,23 @@
 // Show script errors on the page instead of failing silently (the Apps Script
 // web app has no visible console). Kept tiny and first, so it runs even if a
 // later script is broken.
-window.addEventListener("error", function (e) {
+function showScriptError(message, line) {
   var show = function () {
     var box = document.getElementById("scriptError") || document.body.insertBefore(document.createElement("div"), document.body.firstChild);
     box.id = "scriptError";
-    box.style.cssText = "background:#fdecec;color:#8f1d1d;border:1px solid #c62828;padding:10px 14px;margin:8px;border-radius:6px;font:13px/1.4 sans-serif";
-    box.textContent = "The tracker hit a script error, so parts of the page may be missing: " + (e.message || e.error || "unknown error") + (e.lineno ? " (line " + e.lineno + ")" : "") + ". Send this message to whoever maintains the tracker.";
+    box.style.cssText = "background:#fdecec;color:#8f1d1d;border:1px solid #c62828;padding:10px 14px;margin:8px;border-radius:6px;font:13px/1.4 sans-serif;white-space:pre-wrap";
+    box.textContent = "The tracker hit a script error, so parts of the page may be missing:\n" + message + (line ? " (line " + line + ")" : "") +
+      "\nBrowser: " + navigator.userAgent + "\nSend this message to whoever maintains the tracker.";
   };
   document.body ? show() : document.addEventListener("DOMContentLoaded", show);
+}
+window.addEventListener("error", function (e) {
+  showScriptError(String(e.message || e.error || "unknown error"), e.lineno);
+});
+// Errors inside async code arrive here instead of as "error" events.
+window.addEventListener("unhandledrejection", function (e) {
+  var r = e.reason;
+  showScriptError(String((r && (r.stack || r.message)) || r || "unknown error"));
 });
 </script>
 <script>
@@ -622,10 +631,9 @@ tr.is-dismissed td, .issue.is-dismissed { opacity: .7; }
 </header>
 
 <main>
-  <section id="emptyState" class="dropzone hidden">
-    <h2>Load your marketing plan</h2>
-    <p>Drop the CSV exports here: the shared Seasonal Moments file, one file per vertical, and the KPI forecast export.</p>
-    <button class="primary" data-action="pick">Choose CSV files</button>
+  <section id="emptyState" class="dropzone">
+    <h2>Starting the tracker…</h2>
+    <p>If this message stays for more than a few seconds, the page's script didn't start. Look for a red error message above, or reload the page.</p>
   </section>
 
   <section id="sourcesCard" class="card hidden">
@@ -3254,15 +3262,19 @@ try { const paper = localStorage.getItem("marketingTracker.paper"); if (paper) $
 applyPaperSize();
 handleStore.all().then(h => { state.handles = h; });
 
-if (MODE === "appsScript") {
-  loadFromAppsScript();
-} else if (MODE === "urls") {
-  render();
-  loadUrls();
-} else {
-  const saved = storageGet();
-  if (Array.isArray(saved)) state.sources = saved.map(s => ({ ...s, origin: "file" }));
-  rebuild();
+try {
+  if (MODE === "appsScript") {
+    loadFromAppsScript().catch(e => showScriptError(String(e && (e.stack || e.message) || e)));
+  } else if (MODE === "urls") {
+    render();
+    loadUrls().catch(e => showScriptError(String(e && (e.stack || e.message) || e)));
+  } else {
+    const saved = storageGet();
+    if (Array.isArray(saved)) state.sources = saved.map(s => ({ ...s, origin: "file" }));
+    rebuild();
+  }
+} catch (e) {
+  showScriptError(String(e && (e.stack || e.message) || e));
 }
 </script>
 </body>
