@@ -35,7 +35,8 @@ TIERS = ["Seasonal Moment", "Brand Campaign", "Tactical Campaign"]
 VERTICALS = [
     ("S Market", "SMK"), ("Restaurants", "RST"), ("Snoomart", "SNM"),
     ("Grocery", "GRC"), ("SLaundry", "SLD"), ("Services", "SRV"),
-    ("New Ventures", "NVT"), ("Cross-vertical", "CVT"),
+    ("New Ventures", "NVT"), ("Royal Club", "RCL"), ("Snoonu Plus", "SPL"),
+    ("Cross-vertical", "CVT"),
 ]
 CAMPAIGN_TYPES = [
     "Hero", "Promo", "Tactical", "Occasion", "Recurrent", "USP",

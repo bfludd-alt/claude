@@ -5,7 +5,7 @@ One page that shows all marketing activity by month and by week, across three ti
 
 - **Source of truth:** one Google spreadsheet, with one tab per source:
   - **Seasonal Moments:** shared, owned centrally.
-  - **One tab per vertical:** S Market, Restaurants, Snoomart, Grocery, S Laundry, Services, New Ventures. Each holds that vertical's brand and tactical campaigns.
+  - **One tab per vertical:** S Market, Restaurants, Snoomart, Grocery, S Laundry, Services, New Ventures, Royal Club, Snoonu Plus. Each holds that vertical's brand and tactical campaigns.
   - **KPI Forecast:** the forecasting engine's daily forecast and actuals, as-is.
 - **Visual layer:** `index.html`. It's a single file with no install, no build step and no server.
 - **Read-only:** all editing happens in Google Sheets. The tracker links you to the right row.
@@ -99,6 +99,8 @@ One row = one initiative. Don't rename columns. Their order doesn't matter, beca
 | SLaundry | SLD |
 | Services | SRV |
 | New Ventures | NVT |
+| Royal Club | RCL |
+| Snoonu Plus | SPL |
 | Cross-vertical | CVT |
 
 **Good habits**
@@ -303,7 +305,7 @@ If someone sorts or inserts rows after an export, row links point to the old pos
 
 ## 8. Add a tab or a vertical
 
-**One of the eight verticals above:**
+**One of the ten verticals above:**
 1. Add its tab to the spreadsheet (section 2).
 2. Open the tab and copy the address-bar link.
 3. Add `{ label: "<tab name>", type: "campaigns", sheetUrl: "<link>" }` to `sources`.
@@ -313,9 +315,14 @@ The published document picks up the new tab automatically.
 **A KPI layer for a vertical:** add `{ label: "KPI <vertical>", type: "kpi_engine", sheetUrl: "<link>", vertical: "<vertical>" }`.
 
 **A brand-new vertical:** a maintainer also needs to:
-1. In `index.html`, add it to `ALLOWED.vertical`, `VERTICAL_CODES`, and a colour (`--v-xxx` in `:root` plus `VERTICAL_VAR`).
+1. In `index.html`:
+   - Add the name to `ALLOWED.vertical`, before `Cross-vertical`. This list drives the vertical filter, the legend and the grouping order.
+   - Add its code to `VERTICAL_CODES`. This drives id validation, e.g. `RCL-BC-001`.
+   - Add a colour: a `--v-xxx` variable in `:root` plus an entry in `VERTICAL_VAR`. Pick it with a palette validator, so it stays distinct from the existing colours on light and dark backgrounds.
+   - Add `{ label: "<tab name>", type: "campaigns", sheetUrl: "<link>" }` to `CONFIG.sources`.
 2. In `tools/build_templates.py`, add it to `VERTICALS` and run `python3 tools/build_templates.py`.
-3. Add the name to the **Lists** tab's `vertical` column.
+3. In the spreadsheet, add the name to the **Lists** tab's `vertical` column, and extend the `vertical` dropdown range (**Data → Data validation**) on every vertical tab.
+4. Publish a new version of the web app (`apps-script/SETUP.md`, step 6).
 
 ---
 

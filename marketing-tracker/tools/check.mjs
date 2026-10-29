@@ -69,6 +69,7 @@ function parserTests() {
   eq("resolve editUrl", r.editUrl, "https://docs.google.com/spreadsheets/d/ABC_1-x/edit");
   eq("resolve gid", r.gid, "736725729");
   eq("resolve tab vertical", r.tabVertical, "SLaundry");
+  eq("Royal Club tab vertical", core.resolveConfigSource({ label: "Royal Club", type: "campaigns", sheetUrl: "" }, "x").tabVertical, "Royal Club");
   // Status rules
   const def = { direction: "higher_is_better" };
   const st = (actual, mode = "scenarios") => core.kpiStatus({ forecast: 100, bear: 93, bull: 110, actual }, def, mode, 5).status;
@@ -86,7 +87,7 @@ function parserTests() {
   // template literals out: use "quoted" strings and +.
   const bad = templatesWithSlashes(html);
   if (bad.length) { fails++; console.log(`  FAIL "//" inside a template literal (breaks in Apps Script) at index.html line${bad.length > 1 ? "s" : ""} ${bad.join(", ")}`); }
-  const extra = 3 + 3 + 9 + 4 + 8 + 1;
+  const extra = 3 + 3 + 9 + 4 + 8 + 1 + 1;
   console.log(fails ? `Self-tests: ${fails} FAILED` : `Self-tests: all ${cases.length + extra} passed`);
   return fails;
 }

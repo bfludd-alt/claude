@@ -69,6 +69,10 @@ const CONFIG = {
     { label: "S Laundry",        type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=736725729#gid=736725729" },
     { label: "Services",         type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=2033078747#gid=2033078747" },
     { label: "New Ventures",     type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=312703355#gid=312703355" },
+    // Royal Club and Snoonu Plus: the web app finds these tabs by name. Paste each tab's
+    // link as sheetUrl to also get edit links for dropped CSV files.
+    { label: "Royal Club",       type: "campaigns",  sheetUrl: "" },
+    { label: "Snoonu Plus",      type: "campaigns",  sheetUrl: "" },
     { label: "KPI Forecast",     type: "kpi_engine", sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=1008622602#gid=1008622602" },
   ],
 
@@ -117,6 +121,8 @@ const CONFIG = {
   --v-sld: #0891b2;
   --v-srv: #7c3aed;
   --v-nvt: #db2777;
+  --v-rcl: #776c03;   /* Royal Club: olive gold */
+  --v-spl: #cf6ada;   /* Snoonu Plus: orchid */
   --v-cvt: #475569;
   --v-unknown: #9ca3af;
 }
@@ -727,7 +733,7 @@ const TACTICAL = "Tactical Campaign";
 // Keep in sync with tools/build_templates.py
 const ALLOWED = {
   tier: [MOMENT, BRAND, TACTICAL],
-  vertical: ["S Market", "Restaurants", "Snoomart", "Grocery", "SLaundry", "Services", "New Ventures", "Cross-vertical"],
+  vertical: ["S Market", "Restaurants", "Snoomart", "Grocery", "SLaundry", "Services", "New Ventures", "Royal Club", "Snoonu Plus", "Cross-vertical"],
   campaign_type: ["Hero", "Promo", "Tactical", "Occasion", "Recurrent", "USP", "Segmented", "Engagement", "Adoption", "Habit Builder"],
   status: ["Idea", "Planning", "Live", "Complete", "Paused"],
   priority_campaign: ["P0", "P1", "P2", "P3"],
@@ -738,7 +744,8 @@ const FIRM_DATE_CONFIDENCE = ["Confirmed", "Fixed date"];
 
 const VERTICAL_CODES = {
   "S Market": "SMK", "Restaurants": "RST", "Snoomart": "SNM", "Grocery": "GRC",
-  "SLaundry": "SLD", "Services": "SRV", "New Ventures": "NVT", "Cross-vertical": "CVT",
+  "SLaundry": "SLD", "Services": "SRV", "New Ventures": "NVT", "Royal Club": "RCL", "Snoonu Plus": "SPL",
+  "Cross-vertical": "CVT",
 };
 const TIER_ID_CODES = { [BRAND]: "BC", [TACTICAL]: "TC" };
 
@@ -902,8 +909,9 @@ function buildPlan(sources, options = {}) {
 
     const { records, unterminated } = src._records ? { records: src._records, unterminated: src._unterminated } : parseCSV(src.text || "");
     if (unterminated) add({ severity: "error", code: "unterminated_quote", src, message: "File ends inside a quoted cell (a \" is missing its closing quote). The last row may be incomplete." });
-    if (!records.length || records[0].every(c => !c.trim())) {
-      add({ severity: "error", code: "empty_file", src, message: "File is empty or has no header row." });
+    if (records.every(r => r.every(c => !c.trim()))) { summary.empty = true; continue; }   // empty tab: 0 rows
+    if (records[0].every(c => !c.trim())) {
+      add({ severity: "error", code: "empty_file", src, message: "The first row is blank: the header row should be row 1." });
       continue;
     }
 
@@ -1695,7 +1703,8 @@ const STORAGE_OK = (() => { try { const k = "marketingTracker.probe"; localStora
 const STORAGE_KEY = "marketingTracker.localSources.v1";
 const VERTICAL_VAR = {
   "S Market": "--v-smk", "Restaurants": "--v-rst", "Snoomart": "--v-snm", "Grocery": "--v-grc",
-  "SLaundry": "--v-sld", "Services": "--v-srv", "New Ventures": "--v-nvt", "Cross-vertical": "--v-cvt",
+  "SLaundry": "--v-sld", "Services": "--v-srv", "New Ventures": "--v-nvt", "Royal Club": "--v-rcl", "Snoonu Plus": "--v-spl",
+  "Cross-vertical": "--v-cvt",
 };
 const verticalColor = v => `var(${VERTICAL_VAR[v] || "--v-unknown"})`;
 
@@ -1941,7 +1950,8 @@ function renderMonth() {
   $("#monthCount").textContent = `${inMonth.length} initiative${inMonth.length === 1 ? "" : "s"} this month`;
 
   // Legend: verticals present in the data, then status styles, then KPI colours
-  const verticals = ALLOWED.vertical.filter(v => allRows.some(r => r.vertical === v));
+  // Every vertical (so a new, still-empty one is listed); Cross-vertical only when moments are loaded.
+  const verticals = ALLOWED.vertical.filter(v => v !== "Cross-vertical" || allRows.some(r => r.vertical === v));
   const kpiKey = kpiContext() ? `<span class="sep"></span><span class="group"><span class="group-title">KPI</span>
     <span class="item"><span class="sw s-green-cell"></span>At/above forecast</span>
     <span class="item"><span class="sw s-amber-cell"></span>Below forecast, above bear</span>
@@ -2100,6 +2110,7 @@ function renderSources() {
             s.ignored ? `<span class="load-error">Ignored: another file for ${esc(s.vertical)} is loaded</span>` : "",
             s.firstDay != null ? `${s.kind === "kpi_long" ? "" : "days "}${fmtDay(s.firstDay)} – ${fmtDay(s.lastDay)}` : "",
             s.kind === "kpi_engine" && !s.ignored && kpiLatestActual(kpi, s.vertical) != null ? `actuals through ${fmtDayShort(kpiLatestActual(kpi, s.vertical))}` : "",
+            s.empty ? "empty (no header or rows yet)" : "",
             s.blankRows ? `${s.blankRows} blank row${s.blankRows === 1 ? "" : "s"} skipped` : "",
             s.missingOptional?.length ? `<span title="${esc(s.missingOptional.join(", "))}">${s.missingOptional.length} optional column${s.missingOptional.length === 1 ? "" : "s"} not in file (read as blank)</span>` : "",
           ].filter(Boolean).join(" · ")}</td>
@@ -2251,7 +2262,8 @@ function uniqueSorted(values, order) {
 function renderFilters() {
   const rows = state.data.rows, f = state.filters;
   const campaigns = rows.filter(r => r.tier !== MOMENT);
-  const vOpts = uniqueSorted(campaigns.map(r => r.vertical).filter(Boolean), ALLOWED.vertical);
+  // Every campaign vertical, plus any other value found in the rows (so it can be filtered and fixed)
+  const vOpts = uniqueSorted([...ALLOWED.vertical.filter(v => v !== "Cross-vertical"), ...campaigns.map(r => r.vertical).filter(Boolean)], ALLOWED.vertical);
   const typeOpts = uniqueSorted(campaigns.map(r => r.campaign_type).filter(Boolean), ALLOWED.campaign_type);
   const ownerOpts = uniqueSorted(campaigns.map(r => r.owner || NO_OWNER));
 

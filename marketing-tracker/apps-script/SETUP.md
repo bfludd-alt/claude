@@ -31,7 +31,7 @@ The editor shows a file list on the left. It already has one file, **Code.gs**.
 
 Click **Save** (the disk icon, or Ctrl/Cmd+S).
 
-> **Tab names must match.** The tracker looks for tabs named `Seasonal Moments`, `S Market`, `Restaurants`, `Snoomart`, `Grocery`, `S Laundry`, `Services`, `New Ventures` and `KPI Forecast`. Case and spaces don't matter.
+> **Tab names must match.** The tracker looks for tabs named `Seasonal Moments`, `S Market`, `Restaurants`, `Snoomart`, `Grocery`, `S Laundry`, `Services`, `New Ventures`, `Royal Club`, `Snoonu Plus` and `KPI Forecast`. Case and spaces don't matter.
 >
 > If you rename a tab, change its `label` in the `CONFIG` block near the top of the `index` file to match.
 
@@ -64,7 +64,7 @@ The deployment then shows a **Web app URL** ending in `/exec`. Click **Copy**. T
 
 1. Open the **Web app URL** in a new tab.
 2. Wait a few seconds while it reads the spreadsheet.
-3. Expand **Loaded sources** at the top. You should see **9 rows**, one per tab, each marked "Google Sheet tab" with its row count:
+3. Expand **Loaded sources** at the top. You should see **11 rows**, one per tab, each marked "Google Sheet tab" with its row count:
    - **Seasonal Moments:** the number of moments
    - **Each vertical:** its number of campaigns (0 is fine for an empty tab)
    - **KPI Forecast:** the number of days, and "actuals through …" with the latest actual date
