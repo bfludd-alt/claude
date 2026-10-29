@@ -1,0 +1,15 @@
+date,vertical,kpi,forecast,forecast_bear,forecast_bull,actual
+2026-10-18,Grocery,orders,15200,,,15480
+2026-10-18,Grocery,gmv_qar,1480000,,,1502300
+2026-10-19,Grocery,orders,15200,,,14900
+2026-10-19,Grocery,gmv_qar,1480000,,,1441800
+2026-10-20,Grocery,orders,15200,,,13890
+2026-10-20,Grocery,gmv_qar,1480000,,,1310500
+2026-10-21,Grocery,orders,15200,,,15610
+2026-10-21,Grocery,gmv_qar,1480000,,,1530900
+2026-10-22,Grocery,orders,15200,,,16020
+2026-10-22,Grocery,gmv_qar,1480000,,,1569000
+2026-10-23,Grocery,orders,15200,,,15120
+2026-10-23,Grocery,gmv_qar,1480000,,,1466600
+2026-10-24,Grocery,orders,15200,,,
+2026-10-24,Grocery,gmv_qar,1480000,,,

@@ -1,0 +1,11 @@
+id,name,tier,parent_id,vertical,campaign_type,start_date,end_date,status,owner,channels,brief,target_audience,goal,kpis,key_message,top_highlights,budget_qar,notes
+RST-BC-001,Ramadan Iftar,Brand Campaign,SM-404,Restaurants,Occasion,2026-11-01,2026-11-20,Live,Aisha,WhatsApp;Paid Ads,"Multi-line brief:
+- line two, with a comma
+- she said ""yes""",,,,,,"12,500",
+RST-TC-001,No parent tactical,Tactical Campaign,,Restaurants,Promo,2026-11-05,2026-11-06,Planning,,,,,,,,,,
+RST-TC-002,Outside parent,Tactical Campaign,RST-BC-001,Restaurants,Promo,2026-10-28,2026-11-25,Planning,,,,,,,,,lots,
+RST-TC-003,Bad values,Tactical Campaign,RST-BC-001,Restaurant,Flash Sale,11/05/2026,2026-11-31,Done,,,,,,,,,,
+SM-099,Moment in a vertical file,Seasonal Moment,,Cross-vertical,,2026-11-10,2026-11-12,Idea,,,,,,,,,,
+SMK-BC-001,Duplicate of S Market id,Brand Campaign,,Restaurants,Hero,2026-11-01,2026-11-02,Idea,,,,,,,,,,
+RST-TC-004,Child of a tactical,Tactical Campaign,RST-TC-001,Restaurants,Promo,2026-11-05,2026-11-05,Idea,,,,,,,,,,
+RST-TC-005,,Tactical Campaign,SMK-BC-005,Restaurants,,,,Paused,,,,,,,,,,

@@ -1,0 +1,3296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marketing Tracker</title>
+<script>
+// Show script errors on the page instead of failing silently (the Apps Script
+// web app has no visible console). Kept tiny and first, so it runs even if a
+// later script is broken.
+function showScriptError(message, line) {
+  var show = function () {
+    var box = document.getElementById("scriptError") || document.body.insertBefore(document.createElement("div"), document.body.firstChild);
+    box.id = "scriptError";
+    box.style.cssText = "background:#fdecec;color:#8f1d1d;border:1px solid #c62828;padding:10px 14px;margin:8px;border-radius:6px;font:13px/1.4 sans-serif;white-space:pre-wrap";
+    box.textContent = "The tracker hit a script error, so parts of the page may be missing:\n" + message + (line ? " (line " + line + ")" : "") +
+      "\nBrowser: " + navigator.userAgent + "\nSend this message to whoever maintains the tracker.";
+  };
+  document.body ? show() : document.addEventListener("DOMContentLoaded", show);
+}
+window.addEventListener("error", function (e) {
+  showScriptError(String(e.message || e.error || "unknown error"), e.lineno);
+});
+// Errors inside async code arrive here instead of as "error" events.
+window.addEventListener("unhandledrejection", function (e) {
+  var r = e.reason;
+  showScriptError(String((r && (r.stack || r.message)) || r || "unknown error"));
+});
+</script>
+<script>
+/* ============================================================
+   CONFIG — edit this block to point the tracker at your data.
+   ============================================================
+   publishedId  The id in the "Publish to web" link of the whole spreadsheet:
+                https://docs.google.com/spreadsheets/d/e/<publishedId>/pub?output=csv
+                (File > Share > Publish to web > Entire document > CSV)
+
+   sources      One entry per tab: { label, type, sheetUrl }
+     label      The tab's name. For campaign tabs it's also the vertical.
+     type       "moments"     the shared Seasonal Moments tab
+                "campaigns"   a vertical's brand and tactical campaigns
+                "kpi_engine"  the forecasting engine's KPI tab (title row 1, header row 2)
+     sheetUrl   The tab's normal link, copied from the address bar with the tab open:
+                https://docs.google.com/spreadsheets/d/<sheet id>/edit?gid=<tab id>#gid=<tab id>
+
+   Everything else is worked out from these: each tab's published CSV link,
+   the "Edit in sheet" links, and the vertical of each campaign tab.
+
+   mode         How the page loads data when it is NOT running as the Apps Script
+                web app (inside Apps Script it always reads the tabs directly):
+                "local" (default) start with the drop zone; drop CSV exports.
+                "urls"  fetch each tab's "Publish to web" CSV link.
+                Dropping CSV files on the page works in every mode.
+
+   In the Apps Script web app only `label` and `type` are used: tabs are found
+   by name and the edit links come from the spreadsheet itself. `sheetUrl` and
+   `publishedId` are only needed for the "urls" mode and for edit links on
+   dropped files.
+*/
+const CONFIG = {
+  mode: "local",
+  publishedId: "2PACX-1vTBY2uU0M5EwJeEiWFK2y06GTMz881OKAonyKdnk3oT0qR7JbU07h4BoKEuLzHIMpn4KkrTH4e3eH4k",
+  sources: [
+    { label: "Seasonal Moments", type: "moments",    sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=680008376#gid=680008376" },
+    { label: "S Market",         type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=1579014905#gid=1579014905" },
+    { label: "Restaurants",      type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=692704700#gid=692704700" },
+    { label: "Snoomart",         type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=446324488#gid=446324488" },
+    { label: "Grocery",          type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=1905035169#gid=1905035169" },
+    { label: "S Laundry",        type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=736725729#gid=736725729" },
+    { label: "Services",         type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=2033078747#gid=2033078747" },
+    { label: "New Ventures",     type: "campaigns",  sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=312703355#gid=312703355" },
+    // Royal Club and Snoonu Plus: the web app finds these tabs by name. Paste each tab's
+    // link as sheetUrl to also get edit links for dropped CSV files.
+    { label: "Royal Club",       type: "campaigns",  sheetUrl: "" },
+    { label: "Snoonu Plus",      type: "campaigns",  sheetUrl: "" },
+    { label: "KPI Forecast",     type: "kpi_engine", sheetUrl: "https://docs.google.com/spreadsheets/d/1OaZGZvHlUkY_aj_yv5Isew1L2acdSrsE15JZylrYmJI/edit?gid=1008622602#gid=1008622602" },
+  ],
+
+  // Values allowed in relevant_verticals that are audiences, not campaign verticals.
+  informationalAudiences: ["Brand", "City"],
+
+  // KPI definitions. unit: "count" or "QAR". agg: "sum" (added up over days).
+  // derived: [numerator, denominator]; recalculated from the totals, never summed or averaged.
+  kpiDefinitions: {
+    orders:  { label: "Orders", unit: "count", agg: "sum", direction: "higher_is_better" },
+    gmv_qar: { label: "GMV",    unit: "QAR",   agg: "sum", direction: "higher_is_better" },
+    aov_qar: { label: "AOV",    unit: "QAR",   derived: ["gmv_qar", "orders"], direction: "higher_is_better" },
+  },
+
+  // Status colours. "scenarios": green at/above forecast, amber below forecast
+  // but at/above bear, red below bear, blue above bull. Sources or KPIs without
+  // bear/bull (and derived KPIs such as AOV) use the threshold instead:
+  // red more than thresholdPct below forecast, blue more than thresholdPct above.
+  kpiStatus: { mode: "scenarios", thresholdPct: 5 },
+};
+</script>
+<style>
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --border: #dfe3e8;
+  --border-strong: #c5ccd5;
+  --text: #17202b;
+  --text-2: #5a6573;
+  --text-3: #8a94a1;
+  --accent: #1f6feb;
+  --error: #c62828;
+  --error-bg: #fdecec;
+  --warn: #a35c00;
+  --warn-bg: #fff4e0;
+  --ok: #1b7a3a;
+  --radius: 8px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
+
+  /* Vertical colours (bars, legend, chips) */
+  --v-smk: #2563eb;
+  --v-rst: #dc2626;
+  --v-snm: #d97706;
+  --v-grc: #16a34a;
+  --v-sld: #0891b2;
+  --v-srv: #7c3aed;
+  --v-nvt: #db2777;
+  --v-rcl: #776c03;   /* Royal Club: olive gold */
+  --v-spl: #cf6ada;   /* Snoonu Plus: orchid */
+  --v-cvt: #475569;
+  --v-unknown: #9ca3af;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+button, input, select { font: inherit; color: inherit; }
+button {
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+button:hover { background: var(--surface-2); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover { filter: brightness(1.08); }
+button.link { border: 0; background: none; padding: 0; color: var(--accent); }
+button.link:hover { text-decoration: underline; background: none; }
+
+/* ---------- Header ---------- */
+.app-header {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 20;
+}
+.app-header h1 { font-size: 17px; margin: 0; font-weight: 650; letter-spacing: -.01em; }
+.app-header .spacer { flex: 1; }
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 6px 14px; }
+.seg button + button { border-left: 1px solid var(--border-strong); }
+.seg button[aria-pressed="true"] { background: var(--text); color: #fff; }
+.issue-badge {
+  display: inline-flex; gap: 6px; align-items: center;
+}
+.count { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 10px; font-size: 12px; font-weight: 600; text-align: center; }
+.count.error { background: var(--error-bg); color: var(--error); }
+.count.warning { background: var(--warn-bg); color: var(--warn); }
+.count.zero { background: var(--surface-2); color: var(--text-3); }
+
+main { padding: 16px 20px 40px; max-width: 1600px; margin: 0 auto; }
+
+/* ---------- Cards ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+}
+.card > header {
+  display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.card > header h2 { font-size: 14px; margin: 0; font-weight: 650; }
+.card > header .spacer { flex: 1; }
+.card.collapsed > :not(header) { display: none; }
+.card.collapsed > header { border-bottom: 0; }
+.chev { display: inline-block; transition: transform .15s; color: var(--text-3); }
+.card.collapsed .chev { transform: rotate(-90deg); }
+.card-toggle { border: 0; background: none; padding: 0; display: flex; gap: 8px; align-items: center; }
+.card-toggle:hover { background: none; }
+
+table.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.grid th, table.grid td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+table.grid th { font-weight: 600; color: var(--text-2); background: var(--surface-2); position: sticky; top: 0; z-index: 1; white-space: nowrap; }
+table.grid tr:last-child td { border-bottom: 0; }
+table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.muted { color: var(--text-2); }
+.faint { color: var(--text-3); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: nowrap; }
+.scroll { overflow: auto; max-height: 420px; }
+
+/* ---------- Loader ---------- */
+.loader-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.dropzone {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 48px 20px;
+  text-align: center;
+  background: var(--surface);
+}
+.dropzone h2 { margin: 0 0 6px; font-size: 18px; }
+.dropzone p { margin: 0 0 16px; color: var(--text-2); }
+.drop-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(31, 111, 235, .12);
+  border: 3px dashed var(--accent);
+  display: none; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 600; color: var(--accent);
+  pointer-events: none;
+}
+body.dragging .drop-overlay { display: flex; }
+.kind-tag { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); white-space: nowrap; }
+.load-error { color: var(--error); }
+
+/* ---------- Issues ---------- */
+.issue-filters { display: inline-flex; gap: 4px; }
+.issue-filters button { padding: 2px 10px; font-size: 12px; border-radius: 12px; }
+.issue-filters button[aria-pressed="true"] { background: var(--text); color: #fff; border-color: var(--text); }
+.sev { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 1px 6px; border-radius: 4px; }
+.sev.error { color: var(--error); background: var(--error-bg); }
+.sev.warning { color: var(--warn); background: var(--warn-bg); }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: #f7f9fc; }
+.empty-note { padding: 14px; color: var(--text-2); }
+
+/* ---------- Data table ---------- */
+tr.has-error td:first-child { box-shadow: inset 3px 0 0 var(--error); }
+tr.has-warning td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+tr.flash td { animation: flash 1.6s ease-out; }
+@keyframes flash { from { background: #fff3b0; } to { background: transparent; } }
+.vdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+.bad-value { color: var(--error); text-decoration: underline wavy var(--error); text-underline-offset: 3px; }
+
+/* ---------- Period toolbar (month + week views) ---------- */
+.period-bar { flex-wrap: wrap; }
+.period-nav { display: inline-flex; align-items: center; gap: 4px; }
+.period-nav button { padding: 4px 10px; font-size: 16px; line-height: 1; }
+.period-nav h2 { font-size: 16px !important; min-width: 190px; text-align: center; }
+input[type="month"] { border: 1px solid var(--border-strong); border-radius: 6px; padding: 4px 8px; background: var(--surface); }
+
+/* ---------- Legend ---------- */
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-2); align-items: center; }
+.legend .group { display: inline-flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.legend .group-title { font-weight: 600; color: var(--text); margin-right: 2px; }
+.legend .item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.legend .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.legend .sw-bar { width: 26px; height: 12px; border-radius: 3px; display: inline-block; position: relative; }
+.legend .sep { width: 1px; align-self: stretch; background: var(--border); }
+
+/* ---------- Timeline ---------- */
+.tl-scroll { overflow-x: auto; }
+.tl { --label-w: 210px; --row-h: 28px; min-width: 980px; position: relative; font-size: 12px; }
+.tl-row { display: flex; min-height: var(--row-h); }
+.tl-label { flex: 0 0 var(--label-w); width: var(--label-w); padding: 0 10px 0 14px; display: flex; align-items: center; gap: 6px; border-right: 1px solid var(--border); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; background: var(--surface); position: relative; z-index: 3; }
+.tl-track { flex: 1; position: relative; min-width: 0; }
+
+.tl-head { border-bottom: 1px solid var(--border-strong); background: var(--surface); }
+.tl-head .tl-row { min-height: 0; }
+.tl-weeks .tl-track, .tl-days .tl-track { height: 22px; }
+.tl-weeks .tl-label, .tl-days .tl-label { color: var(--text-3); font-size: 11px; }
+.wk-label { position: absolute; top: 0; height: 22px; display: flex; align-items: center; padding-left: 6px; font-weight: 600; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--border-strong); }
+.wk-label.partial { color: var(--text-3); font-weight: 500; }
+.day-cell { position: absolute; top: 0; height: 22px; display: flex; align-items: center; justify-content: center; gap: 2px; color: var(--text-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.day-cell b { color: var(--text-2); font-weight: 600; }
+.day-cell.sun { border-left: 1px solid var(--border-strong); }
+.day-cell.today b { background: var(--error); color: #fff; border-radius: 9px; padding: 0 5px; }
+
+.tl-body { position: relative; }
+.tl-grid { position: absolute; top: 0; bottom: 0; left: var(--label-w); right: 0; pointer-events: none; z-index: 0; }
+.tl-grid .weekend { position: absolute; top: 0; bottom: 0; background: rgba(23, 32, 43, .025); }
+.tl-grid .wk-line { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--border); }
+.tl-grid .today-line { position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--error); z-index: 4; }
+.tl-grid .today-line::before { content: ""; position: absolute; top: -4px; left: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--error); }
+
+.tl-lane-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px 6px; background: var(--surface-2); border-top: 1px solid var(--border-strong); border-bottom: 1px solid var(--border); position: relative; z-index: 3; }
+.tl-lane-head h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--text); }
+.tl-lane-head .muted { font-size: 12px; }
+.tl-group-first { border-top: 1px solid var(--border); }
+.tl-campaigns .tl-lane-head + .tl-group-first { border-top: 0; }
+.tl-group-head { cursor: pointer; font-weight: 600; color: var(--text); }
+.tl-group-head:hover { background: var(--surface-2); }
+.tl-group-head .chev { font-size: 10px; width: 10px; }
+.tl-group-head.collapsed .chev { transform: rotate(-90deg); }
+.tl-group-head .n { color: var(--text-3); font-weight: 500; }
+.tl-empty { padding: 8px 14px; color: var(--text-3); font-style: italic; position: relative; z-index: 3; }
+
+.tl-campaigns { position: relative; }
+.tl-bands { position: absolute; top: 0; bottom: 0; left: var(--label-w); right: 0; pointer-events: none; z-index: 0; }
+.band { position: absolute; top: 0; bottom: 0; background: rgba(71, 85, 105, .045); border-left: 1px dashed rgba(71, 85, 105, .4); border-right: 1px dashed rgba(71, 85, 105, .4); transition: background .15s; }
+.band.t1 { background: rgba(71, 85, 105, .1); border-left: 1px solid rgba(71, 85, 105, .6); border-right: 1px solid rgba(71, 85, 105, .6); }
+.band.hl { background: rgba(71, 85, 105, .2); border-color: rgba(71, 85, 105, .85); }
+.bar.tentative { border-style: dashed; border-color: color-mix(in srgb, var(--c) 80%, #000); }
+
+/* Bars: colour = vertical (--c), style = status */
+.bar {
+  --c: var(--v-unknown);
+  position: absolute; top: 3px; height: calc(var(--row-h) - 6px);
+  border-radius: 5px; border: 1.5px solid var(--c);
+  padding: 0 7px; display: flex; align-items: center;
+  font-size: 12px; font-weight: 600; text-align: left;
+  z-index: 2; cursor: pointer; min-width: 6px;
+}
+.bar:hover { filter: brightness(.95); box-shadow: 0 1px 4px rgba(0,0,0,.18); z-index: 5; }
+.bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bar-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; pointer-events: none; }
+.bar.lbl-right .bar-label, .bar.lbl-left .bar-label { position: absolute; color: var(--text); overflow: visible; }
+.bar.lbl-right .bar-label { left: calc(100% + 5px); }
+.bar.lbl-left .bar-label { right: calc(100% + 5px); }
+
+.bar.st-idea     { background: var(--surface); border-style: dashed; color: color-mix(in srgb, var(--c) 75%, #000); }
+.bar.st-planning { background: color-mix(in srgb, var(--c) 18%, #fff); border-color: color-mix(in srgb, var(--c) 55%, #fff); color: color-mix(in srgb, var(--c) 60%, #000); }
+.bar.st-live     { background: var(--c); color: #fff; }
+.bar.st-complete { background: color-mix(in srgb, var(--c) 30%, #fff); border-color: color-mix(in srgb, var(--c) 30%, #fff); color: color-mix(in srgb, var(--c) 35%, #8a94a1); }
+.bar.st-paused   { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 32%, #fff) 0 4px, #fff 4px 8px); color: color-mix(in srgb, var(--c) 60%, #000); }
+.bar.st-none     { background: var(--surface); border-style: dotted; color: var(--text-2); }
+.bar.st-complete .bar-label { text-decoration: none; }
+.bar.lbl-right.st-complete .bar-label, .bar.lbl-left.st-complete .bar-label { color: var(--text-3); }
+
+/* Clipped at the month edge: square edge + arrow */
+.bar.clip-l { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding-left: 16px; }
+.bar.clip-r { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right-width: 0; padding-right: 16px; }
+.bar.clip-l::before, .bar.clip-r::after { position: absolute; top: 50%; transform: translateY(-50%); font-size: 11px; line-height: 1; opacity: .85; }
+.bar.clip-l::before { content: "◀"; left: 2px; }
+.bar.clip-r::after { content: "▶"; right: 2px; }
+.bar.lbl-right.clip-r .bar-label { left: calc(100% + 5px); }
+
+.bar .idot { margin-right: 5px; box-shadow: 0 0 0 1.5px #fff; }
+
+.mini-bar { position: absolute; top: 50%; height: 6px; margin-top: -3px; border-radius: 3px; background: var(--c); opacity: .55; }
+
+.tl-note { padding: 10px 14px; font-size: 12px; color: var(--text-2); border-top: 1px solid var(--border); }
+.tl-note:empty { display: none; }
+
+/* ---------- Status chips ---------- */
+.chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 10px; border: 1px solid transparent; white-space: nowrap; }
+.chip.st-idea { border: 1px dashed #8a94a1; color: #5a6573; background: #fff; }
+.chip.st-planning { background: #e6efff; color: #1a4fb5; border-color: #c4d6fb; }
+.chip.st-live { background: #1b7a3a; color: #fff; }
+.chip.st-complete { background: #eef0f3; color: #8a94a1; }
+.chip.st-paused { background: repeating-linear-gradient(135deg, #fde7c2 0 4px, #fff 4px 8px); color: #8a4b00; border-color: #f2c47a; }
+.chip.st-none { background: var(--error-bg); color: var(--error); }
+.chip.tier { background: var(--surface-2); color: var(--text-2); border-color: var(--border); }
+.chip.prio { background: #fff; color: var(--text); border-color: var(--border-strong); font-variant-numeric: tabular-nums; }
+.chip.prio.bad { color: var(--error); border-color: var(--error); }
+.chip.tent { background: #fff7e6; color: #8a4b00; border: 1px dashed #d99a3a; }
+.tent { color: #8a4b00; }
+.chips { display: inline-flex; gap: 4px; flex: none; }
+.ch.info { background: #fff; border-style: dashed; color: var(--text-2); }
+
+/* ---------- Weekly view ---------- */
+.week-body { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; }
+.week-col { border-right: 1px solid var(--border); min-width: 0; }
+.week-col:last-child { border-right: 0; }
+.week-col > h3 { margin: 0; padding: 10px 14px; font-size: 13px; font-weight: 700; border-bottom: 1px solid var(--border); background: var(--surface-2); display: flex; gap: 8px; align-items: baseline; }
+.week-col > h3 .muted { font-weight: 500; }
+.week-col .wk-empty { padding: 14px; color: var(--text-3); font-style: italic; }
+.wk-tier { padding: 10px 14px 2px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); }
+.wk-vertical { padding: 6px 14px 4px; font-size: 12px; font-weight: 600; display: flex; align-items: center; }
+.wk-card {
+  --c: var(--v-unknown);
+  display: block; width: calc(100% - 28px); margin: 0 14px 8px; text-align: left;
+  border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 6px;
+  padding: 8px 10px; background: var(--surface);
+}
+.wk-card:hover { background: #f9fafb; box-shadow: var(--shadow); }
+.wk-card .t { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+.wk-card .name { font-weight: 650; font-size: 13px; }
+.wk-card .meta { color: var(--text-2); font-size: 12px; margin-top: 3px; }
+.wk-card .meta b { font-weight: 600; color: var(--text); }
+.wk-card .parent { color: var(--text-2); font-size: 12px; margin-top: 3px; }
+
+/* ---------- Filters ---------- */
+.filter-bar { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; padding: 10px 14px; }
+.filter-bar label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
+.filter-bar select, .ms > summary { border: 1px solid var(--border-strong); border-radius: 6px; padding: 4px 8px; background: var(--surface); font-size: 13px; color: var(--text); }
+.filter-bar select.active, .ms.active > summary { border-color: var(--accent); background: #eef4ff; }
+.ms { position: relative; }
+.ms > summary { list-style: none; cursor: pointer; min-width: 150px; }
+.ms > summary::-webkit-details-marker { display: none; }
+.ms > summary::after { content: "▾"; float: right; margin-left: 8px; color: var(--text-3); }
+.ms-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: 0 8px 24px rgba(16,24,40,.14); padding: 6px; min-width: 210px; }
+.ms-menu label { display: flex; padding: 5px 8px; border-radius: 5px; color: var(--text); font-size: 13px; cursor: pointer; }
+.ms-menu label:hover { background: var(--surface-2); }
+.ms-menu .ms-actions { display: flex; gap: 12px; padding: 4px 8px 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; font-size: 12px; }
+.filter-note { font-size: 12px; color: var(--text-2); }
+
+/* ---------- Side panel ---------- */
+.panel-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, .25); z-index: 40; }
+.panel {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 100vw); z-index: 41;
+  background: var(--surface); box-shadow: -8px 0 32px rgba(16,24,40,.18);
+  display: flex; flex-direction: column;
+}
+.panel-head { padding: 14px 18px 12px; border-bottom: 1px solid var(--border); border-top: 5px solid var(--c, var(--v-unknown)); }
+.panel-head .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.panel-head h2 { margin: 8px 0 4px; font-size: 19px; line-height: 1.25; }
+.panel-head .close { margin-left: auto; border: 0; font-size: 22px; line-height: 1; padding: 2px 8px; color: var(--text-2); }
+.panel-body { overflow-y: auto; padding: 4px 18px 24px; }
+.panel dl { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; margin: 12px 0; font-size: 13px; }
+.panel dt { color: var(--text-2); }
+.panel dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.panel h4 { margin: 18px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); }
+.panel .text { white-space: pre-wrap; font-size: 13px; margin: 0; }
+.panel .text.empty { color: var(--text-3); font-style: italic; }
+.panel ul.bullets { margin: 0; padding-left: 18px; font-size: 13px; }
+.panel .rel {
+  --c: var(--v-unknown);
+  display: flex; gap: 10px; align-items: center; width: 100%; text-align: left;
+  border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 6px; padding: 7px 10px; margin-bottom: 6px; background: var(--surface);
+}
+.panel .rel:hover { background: var(--surface-2); }
+.panel .rel .grow { flex: 1; min-width: 0; }
+.panel .rel .sub { font-size: 12px; color: var(--text-2); }
+.panel .issue { font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
+.ch { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); margin: 0 4px 4px 0; }
+.bar.pulse { animation: pulse 1.4s ease-out 2; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(31,111,235,.7); } 100% { box-shadow: 0 0 0 10px rgba(31,111,235,0); } }
+
+.print-header { display: none; }
+
+@media (max-width: 900px) {
+  .week-body { grid-template-columns: 1fr; }
+  .week-col { border-right: 0; border-bottom: 1px solid var(--border); }
+  main { padding: 12px 16px 32px; }
+  .app-header { padding: 10px 16px; }
+}
+
+/* ---------- Print (landscape A4/A3, size set by the Print control) ---------- */
+@media print {
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: #fff; font-size: 11px; }
+  .app-header, #emptyState, #sourcesCard, #issuesCard, #filtersCard, .panel, .panel-backdrop,
+  .period-bar input, .period-bar button, .drop-overlay, .tl-note button.link { display: none !important; }
+  main { padding: 0; max-width: none; }
+  .card { box-shadow: none; border: 0; margin: 0; }
+  .print-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin: 0 0 6px; padding-bottom: 6px; border-bottom: 2px solid var(--text); }
+  .print-header h1 { margin: 0; font-size: 18px; }
+  .print-header .sub { font-size: 10px; color: var(--text-2); text-align: right; }
+  .period-bar { display: none !important; }
+  .legend { padding: 4px 0 6px; border-bottom: 0; }
+  .tl-scroll { overflow: visible; }
+  .tl { min-width: 0 !important; width: 100%; --label-w: 150px; }
+  .tl.has-kpi { --mtd-w: 150px; }
+  #tip, .kpi-toggles, .kpi-prompt button, .notice, .btn { display: none !important; }
+  .tl-head { border-top: 1px solid var(--border-strong); }
+  .tl-row, .tl-lane-head, .wk-card { break-inside: avoid; }
+  .tl-lane-head { break-after: avoid; }
+  .tl-group-head .chev { visibility: hidden; }
+  .bar:hover { box-shadow: none; filter: none; }
+  .tl-note { border-top: 0; padding: 4px 0; }
+  .week-body { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .week-col { border-right: 1px solid var(--border); border-bottom: 0; }
+  .wk-card { box-shadow: none; padding: 4px 8px; margin-bottom: 4px; }
+  .wk-card .name { font-size: 11px; }
+  .wk-card .meta, .wk-card .parent { font-size: 10px; margin-top: 1px; }
+  .wk-tier { padding-top: 6px; }
+  .wk-vertical { padding: 3px 14px 2px; }
+  .week-col > h3 { padding: 6px 10px; }
+}
+
+/* ---------- KPI strip (month) ---------- */
+:root {
+  --k-green-bg: #d9f2e1; --k-green: #14532d;
+  --k-amber-bg: #fdecc8; --k-amber: #7c4a03;
+  --k-red-bg: #fbd5d5;   --k-red: #8f1d1d;
+  --k-over: #2563eb;
+}
+.tl { --mtd-w: 0px; }
+.tl.has-kpi { --mtd-w: 172px; }
+.tl-row { padding-right: var(--mtd-w); position: relative; }
+.tl-grid, .tl-bands { right: var(--mtd-w); }
+.tl-kpi-head { display: flex; align-items: center; gap: 10px; padding: 6px 14px 4px; background: var(--surface-2); border-bottom: 1px solid var(--border); position: relative; z-index: 3; }
+.tl-kpi-head h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+.kpi-scope { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #fff; border: 1px solid var(--border-strong); color: var(--text-2); }
+.kpi-row { min-height: 34px; }
+.kpi-row .tl-label { font-weight: 600; color: var(--text); }
+.kpi-row .tl-label .unit { color: var(--text-3); font-weight: 500; font-size: 11px; }
+.kc {
+  position: absolute; top: 3px; bottom: 3px; margin: 0 1px; padding: 0;
+  border: 0; border-radius: 3px; z-index: 2; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+.kc.s-green, .s-green-cell { background: var(--k-green-bg); color: var(--k-green); }
+.kc.s-amber, .s-amber-cell { background: var(--k-amber-bg); color: var(--k-amber); }
+.kc.s-red, .s-red-cell { background: var(--k-red-bg); color: var(--k-red); }
+.kc.s-over, .s-over-cell { background: var(--k-green-bg); color: var(--k-green); box-shadow: inset 0 0 0 2px var(--k-over); }
+.kc.s-no_actual { background: transparent; color: var(--text-3); font-weight: 500; font-style: italic; box-shadow: inset 0 0 0 1px var(--border); }
+.kc:hover { filter: brightness(.95); }
+.kc.sm { font-size: 8.5px; letter-spacing: -.03em; }
+.kc.today { outline: 2px solid var(--error); outline-offset: -1px; }
+.mtd {
+  position: absolute; right: 0; top: 0; bottom: 0; width: var(--mtd-w);
+  border-left: 1px solid var(--border-strong); background: var(--surface); z-index: 3;
+  padding: 2px 8px; display: flex; flex-direction: column; justify-content: center; font-size: 11px; line-height: 1.25;
+  cursor: default;
+}
+.mtd .top { display: flex; align-items: center; gap: 6px; font-weight: 650; }
+.mtd .sub { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mtd-head { position: absolute; right: 0; top: 0; bottom: 0; width: var(--mtd-w); border-left: 1px solid var(--border-strong); display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 600; color: var(--text-2); background: var(--surface); }
+.st-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.st-dot.s-green { background: #22a052; } .st-dot.s-amber { background: #e08a00; } .st-dot.s-red { background: var(--error); }
+.st-dot.s-over { background: #22a052; box-shadow: 0 0 0 2px var(--k-over); } .st-dot.s-no_actual, .st-dot.s-none { background: var(--border-strong); }
+.kpi-prompt { padding: 10px 14px; font-size: 13px; color: var(--text-2); background: #f8fafc; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.kpi-toggles { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--text-2); }
+.kpi-toggles label { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--border-strong); border-radius: 12px; cursor: pointer; }
+.kpi-toggles label:has(input:checked) { background: var(--text); color: #fff; border-color: var(--text); }
+.kpi-toggles input { display: none; }
+.actuals-through { font-size: 12px; color: var(--text-2); padding: 2px 10px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); white-space: nowrap; }
+
+/* Hover card for KPI cells */
+#tip {
+  position: fixed; z-index: 60; pointer-events: none; display: none;
+  background: #111827; color: #f9fafb; border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25); max-width: 300px;
+}
+#tip h5 { margin: 0 0 4px; font-size: 12px; }
+#tip table { border-collapse: collapse; }
+#tip td { padding: 0 10px 0 0; white-space: nowrap; }
+#tip td.v { text-align: right; font-variant-numeric: tabular-nums; }
+#tip .st { margin-top: 4px; font-weight: 600; }
+
+/* ---------- KPI table (week) ---------- */
+.week-kpi { border-bottom: 1px solid var(--border); overflow-x: auto; }
+.week-kpi table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.week-kpi th, .week-kpi td { padding: 4px 8px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+.week-kpi thead th { background: var(--surface-2); font-weight: 600; color: var(--text-2); position: sticky; top: 0; }
+.week-kpi thead th.dayh { cursor: pointer; }
+.week-kpi thead th.dayh:hover { color: var(--accent); }
+.week-kpi thead th.today { color: var(--error); }
+.week-kpi th.rowh { text-align: left; font-weight: 500; color: var(--text-2); }
+.week-kpi tr.kname th { text-align: left; background: #fafbfc; font-weight: 700; color: var(--text); border-top: 1px solid var(--border-strong); }
+.week-kpi td.wk-total { border-left: 2px solid var(--border-strong); font-weight: 600; }
+.week-kpi td.na { color: var(--text-3); font-style: italic; }
+.week-kpi td.neg { color: var(--k-red); } .week-kpi td.pos { color: var(--k-green); }
+.week-kpi .foot { padding: 6px 14px; font-size: 11px; color: var(--text-2); }
+
+/* ---------- Buttons, menus, notices ---------- */
+a.btn, span.btn { display: inline-flex; align-items: center; gap: 4px; text-decoration: none; color: inherit; border: 1px solid var(--border-strong); background: var(--surface); border-radius: 6px; padding: 6px 12px; white-space: nowrap; }
+a.btn:hover { background: var(--surface-2); }
+.btn-sm, a.btn.btn-sm, span.btn.btn-sm { padding: 2px 8px; font-size: 12px; border-radius: 5px; }
+button.btn { border: 1px solid var(--border-strong); }
+span.btn.disabled { color: var(--text-3); border-style: dashed; cursor: not-allowed; }
+.menu-link { display: block; padding: 6px 8px; border-radius: 5px; color: var(--text); text-decoration: none; font-size: 13px; }
+.menu-link:hover { background: var(--surface-2); }
+.notice { position: fixed; left: 50%; transform: translateX(-50%); top: 64px; z-index: 50; background: #111827; color: #f9fafb; padding: 8px 14px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.2); font-size: 13px; max-width: min(720px, calc(100vw - 32px)); }
+.notice button { margin-left: 6px; }
+.notice button.link { color: #cbd5e1; }
+.panel-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 8px; }
+
+/* ---------- Issues: actions and dismissals ---------- */
+.issue-actions { white-space: nowrap; text-align: right; }
+.issue-actions > * { margin-left: 4px; }
+tr.dismiss-form td { background: #f8fafc; }
+tr.dismiss-form input { width: min(360px, 60vw); padding: 3px 6px; border: 1px solid var(--border-strong); border-radius: 5px; margin: 0 6px; }
+.dismissed-box { border-top: 1px solid var(--border); }
+.dismissed-box > summary { padding: 8px 14px; cursor: pointer; font-size: 13px; color: var(--text-2); }
+tr.is-dismissed td, .issue.is-dismissed { opacity: .7; }
+.sev.dismissed { opacity: .45; text-decoration: line-through; }
+.bar .idot.dismissed, .idot.dismissed { background: #fff; box-shadow: 0 0 0 1.5px var(--error); }
+.idot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; flex: none; }
+.idot.error { background: var(--error); }
+.idot.warning { background: #e08a00; }
+
+/* ---------- Day panel ---------- */
+.day-headline { margin: 12px 0 4px; padding: 8px 10px; border-radius: 6px; font-weight: 600; font-size: 13px; background: var(--surface-2); }
+.day-kpi { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+.day-kpi-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--surface-2); font-size: 13px; }
+.day-kpi-head .spacer { flex: 1; }
+.day-kpi table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.day-kpi th, .day-kpi td { padding: 5px 8px; border-top: 1px solid var(--border); text-align: right; vertical-align: top; }
+.day-kpi thead th { color: var(--text-2); font-weight: 600; border-top: 0; }
+.day-kpi tbody th { text-align: left; font-weight: 600; }
+.day-kpi td.na { color: var(--text-3); font-style: italic; }
+.day-kpi .faint { font-size: 11px; }
+.chip.kst { background: var(--surface-2); color: var(--text-2); border-color: var(--border); white-space: normal; text-align: left; }
+.day-vertical { display: flex; align-items: center; font-weight: 600; font-size: 13px; margin: 10px 0 6px; }
+.day-vertical .faint { margin-left: 6px; font-weight: 500; }
+.day-cell[data-day] { cursor: pointer; }
+.day-cell[data-day]:hover b { color: var(--accent); }
+
+/* Calendar tint by orders status */
+.tl-grid .tint { position: absolute; top: 0; bottom: 0; }
+.tint.t-green { background: rgba(34, 160, 82, .09); }
+.tint.t-over { background: rgba(37, 99, 235, .10); }
+.tint.t-amber { background: rgba(224, 138, 0, .12); }
+.tint.t-red { background: rgba(198, 40, 40, .13); }
+
+.dialog { position: fixed; z-index: 45; left: 50%; top: 10vh; transform: translateX(-50%); width: min(640px, calc(100vw - 32px)); background: var(--surface); border-radius: 10px; box-shadow: 0 12px 40px rgba(16,24,40,.25); padding: 16px 18px; }
+.dialog h3 { margin: 0 0 6px; font-size: 16px; }
+.dialog p { margin: 0 0 10px; color: var(--text-2); font-size: 13px; }
+.dialog textarea { width: 100%; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; border: 1px solid var(--border-strong); border-radius: 6px; padding: 8px; resize: vertical; }
+.dialog-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.dialog-actions .spacer { flex: 1; }
+
+.placeholder { padding: 40px; text-align: center; color: var(--text-2); }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="drop-overlay">Drop CSV files to load them</div>
+
+<header class="app-header">
+  <h1>Marketing Tracker</h1>
+  <span class="actuals-through hidden" id="actualsThrough"></span>
+  <div class="seg" role="group" aria-label="View">
+    <button data-view="month" aria-pressed="true">Month</button>
+    <button data-view="week" aria-pressed="false">Week</button>
+    <button data-view="data" aria-pressed="false">Data</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="loader-bar" id="loaderBar"></div>
+  <div class="loader-bar">
+    <select id="paperSize" aria-label="Paper size for printing">
+      <option value="A4">A4 landscape</option>
+      <option value="A3">A3 landscape</option>
+    </select>
+    <button data-action="print">Print</button>
+  </div>
+  <input type="file" id="filePicker" accept=".csv,text/csv,.json,application/json" multiple hidden>
+  <input type="file" id="dismissImport" accept=".json,application/json" hidden>
+  <div class="notice hidden" id="notice" role="status"></div>
+</header>
+
+<main>
+  <section id="emptyState" class="dropzone">
+    <h2>Starting the tracker…</h2>
+    <p>If this message stays for more than a few seconds, the page's script didn't start. Look for a red error message above, or reload the page.</p>
+  </section>
+
+  <section id="sourcesCard" class="card hidden">
+    <header>
+      <button class="card-toggle" data-toggle="sourcesCard"><span class="chev">▾</span><h2>Loaded sources</h2></button>
+      <span class="muted" id="sourcesSummary"></span>
+    </header>
+    <div id="sourcesBody" style="overflow-x:auto"></div>
+  </section>
+
+  <section id="issuesCard" class="card hidden">
+    <header>
+      <button class="card-toggle" data-toggle="issuesCard"><span class="chev">▾</span><h2>Data issues</h2></button>
+      <span class="issue-badge" id="issuesCounts"></span>
+      <div class="spacer"></div>
+      <button class="btn btn-sm" data-action="export-dismissals" title="Save the dismissed issues as a JSON file to share with the team">Export dismissals</button>
+      <button class="btn btn-sm" data-action="import-dismissals" title="Load a dismissals JSON file exported by someone else">Import dismissals</button>
+      <div class="issue-filters" id="issueFilters">
+        <button data-sev="all" aria-pressed="true">All</button>
+        <button data-sev="error" aria-pressed="false">Errors</button>
+        <button data-sev="warning" aria-pressed="false">Warnings</button>
+      </div>
+    </header>
+    <div class="scroll" id="issuesBody"></div>
+  </section>
+
+  <section id="filtersCard" class="card hidden">
+    <div class="filter-bar" id="filterBar"></div>
+  </section>
+
+  <div class="print-header" id="printHeader"></div>
+
+  <section id="viewMonth" class="card view hidden">
+    <header class="period-bar">
+      <div class="period-nav">
+        <button data-nav="-1" aria-label="Previous month">‹</button>
+        <h2 id="monthTitle"></h2>
+        <button data-nav="1" aria-label="Next month">›</button>
+      </div>
+      <input type="month" id="monthJump" aria-label="Jump to month">
+      <button data-action="today">Today</button>
+      <span class="muted" id="monthCount"></span>
+      <span class="kpi-toggles" id="kpiToggles"></span>
+    </header>
+    <div class="legend" id="monthLegend"></div>
+    <div class="tl-scroll"><div class="tl" id="timeline"></div></div>
+    <div class="tl-note" id="monthNote"></div>
+  </section>
+  <section id="viewWeek" class="card view hidden">
+    <header class="period-bar">
+      <div class="period-nav">
+        <button data-nav="-1" aria-label="Previous week">‹</button>
+        <h2 id="weekTitle"></h2>
+        <button data-nav="1" aria-label="Next week">›</button>
+      </div>
+      <input type="date" id="weekJump" aria-label="Jump to the week containing a date">
+      <button data-action="today">This week</button>
+      <span class="muted" id="weekRange"></span>
+    </header>
+    <div class="week-kpi" id="weekKpi"></div>
+    <div class="week-body" id="weekBody"></div>
+    <div class="tl-note" id="weekNote"></div>
+  </section>
+  <section id="viewData" class="card view hidden">
+    <header><h2>All initiatives</h2><span class="muted" id="dataSummary"></span></header>
+    <div class="scroll" style="max-height:none" id="dataBody"></div>
+  </section>
+</main>
+
+<div id="panelRoot"></div>
+<div id="tip" role="tooltip"></div>
+<div id="dialogRoot"></div>
+
+<script>
+/* CORE:BEGIN — pure data logic, no DOM. tools/check.mjs runs this block in Node. */
+
+// Columns of the campaign and seasonal moment sheets, matched by header name.
+// Any missing column is read as blank, except the required ones.
+const COLUMNS = [
+  "id", "name", "tier", "parent_id", "vertical", "relevant_verticals", "sub_vertical",
+  "campaign_type", "priority", "date_confidence", "start_date", "end_date", "status",
+  "owner", "channels", "objective", "brief", "target_audience", "goal", "kpis",
+  "key_message", "top_highlights", "budget_qar", "notes",
+];
+const REQUIRED_COLUMNS = ["id", "name", "tier", "start_date", "end_date"];
+
+const MOMENT = "Seasonal Moment";
+const BRAND = "Brand Campaign";
+const TACTICAL = "Tactical Campaign";
+
+// Keep in sync with tools/build_templates.py
+const ALLOWED = {
+  tier: [MOMENT, BRAND, TACTICAL],
+  vertical: ["S Market", "Restaurants", "Snoomart", "Grocery", "SLaundry", "Services", "New Ventures", "Royal Club", "Snoonu Plus", "Cross-vertical"],
+  campaign_type: ["Hero", "Promo", "Tactical", "Occasion", "Recurrent", "USP", "Segmented", "Engagement", "Adoption", "Habit Builder"],
+  status: ["Idea", "Planning", "Live", "Complete", "Paused"],
+  priority_campaign: ["P0", "P1", "P2", "P3"],
+  priority_moment: ["T1", "T2", "T3"],
+  date_confidence: ["Confirmed", "Fixed date", "Tentative", "Tentative (lunar)", "School-specific", "Planning window"],
+};
+const FIRM_DATE_CONFIDENCE = ["Confirmed", "Fixed date"];
+
+const VERTICAL_CODES = {
+  "S Market": "SMK", "Restaurants": "RST", "Snoomart": "SNM", "Grocery": "GRC",
+  "SLaundry": "SLD", "Services": "SRV", "New Ventures": "NVT", "Royal Club": "RCL", "Snoonu Plus": "SPL",
+  "Cross-vertical": "CVT",
+};
+const TIER_ID_CODES = { [BRAND]: "BC", [TACTICAL]: "TC" };
+
+// Issue types: code -> label used for "Dismiss all of this type".
+const ISSUE_TYPES = {
+  load_failed: "File could not be loaded",
+  unterminated_quote: "Unclosed quote in file",
+  empty_file: "Empty file",
+  missing_columns: "Missing required columns",
+  unknown_columns: "Unknown columns",
+  extra_cells: "Row has extra cells",
+  missing_id: "Missing id",
+  missing_name: "Missing name",
+  invalid_value: "Value not in the allowed list",
+  missing_value: "Missing required value",
+  unknown_relevant_vertical: "Unknown value in relevant_verticals",
+  moment_in_vertical_file: "Seasonal moment in a vertical file",
+  campaign_in_moments_file: "Campaign in the moments file",
+  missing_date: "Missing date",
+  invalid_date: "Invalid date",
+  end_before_start: "End date before start date",
+  date_format: "Date typed as D/M/YYYY",
+  vertical_mismatch: "Row's vertical differs from its tab",
+  id_pattern: "id doesn't follow the pattern",
+  budget_nan: "Budget is not a number",
+  duplicate_id: "Duplicate id",
+  moment_has_parent: "Seasonal moment has a parent",
+  parent_not_found: "Parent not found",
+  self_parent: "Row is its own parent",
+  parent_wrong_tier: "Parent is the wrong tier",
+  tactical_no_parent: "Tactical campaign with no parent",
+  outside_parent: "Dates outside the parent's dates",
+};
+
+/* ---------- CSV ---------- */
+
+// RFC 4180: quoted cells may hold commas, line breaks and "" (an escaped quote).
+// Returns { records: string[][], unterminated: boolean }.
+function parseCSV(text) {
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  text = text.replace(/\r\n?/g, "\n");
+  const records = [];
+  let rec = [], field = "", inQuotes = false, fieldStarted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else if (c === '"' && !fieldStarted) {
+      inQuotes = true; fieldStarted = true;
+    } else if (c === ",") {
+      rec.push(field); field = ""; fieldStarted = false;
+    } else if (c === "\n") {
+      rec.push(field); records.push(rec);
+      rec = []; field = ""; fieldStarted = false;
+    } else {
+      field += c; fieldStarted = true;
+    }
+  }
+  if (fieldStarted || rec.length) { rec.push(field); records.push(rec); }
+  return { records, unterminated: inQuotes };
+}
+
+/* ---------- Dates ----------
+   A date is a whole calendar day, stored as a day number (days since
+   1970-01-01). There is no time of day and no time zone, so a date can never
+   shift. "Today" is taken from the viewer's local clock. */
+
+const DAY_MS = 86400000;
+
+function dayFromYMD(y, m, d) { return Date.UTC(y, m, d) / DAY_MS; }       // m is 0-based
+function validYMD(y, m, d) {
+  const dt = new Date(Date.UTC(y, m, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m && dt.getUTCDate() === d;
+}
+function parseISODate(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m || !validYMD(+m[1], +m[2] - 1, +m[3])) return null;
+  return dayFromYMD(+m[1], +m[2] - 1, +m[3]);
+}
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+// DD-Mmm-YY (e.g. 14-May-26), as written by the forecasting engine. Four-digit years also accepted.
+function parseDMYDate(s) {
+  const m = /^(\d{1,2})-([A-Za-z]{3})-(\d{2}|\d{4})$/.exec(s);
+  if (!m) return null;
+  const mo = MONTHS_SHORT.findIndex(x => x.toLowerCase() === m[2].toLowerCase());
+  const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+  if (mo < 0 || !validYMD(y, mo, +m[1])) return null;
+  return dayFromYMD(y, mo, +m[1]);
+}
+function dayToDate(n) { return new Date(n * DAY_MS); }                    // read with getUTC* only
+function dayToISO(n) { return dayToDate(n).toISOString().slice(0, 10); }
+function dayParts(n) { const d = dayToDate(n); return [d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()]; }
+function weekday(n) { return ((n + 4) % 7 + 7) % 7; }                     // 0 = Sunday
+function weekStart(n) { return n - weekday(n); }                          // weeks run Sun..Sat
+function monthBounds(y, m) { return [dayFromYMD(y, m, 1), dayFromYMD(y, m + 1, 1) - 1]; }
+function todayDay() { const t = new Date(); return dayFromYMD(t.getFullYear(), t.getMonth(), t.getDate()); }
+function fmtDay(n) { const [y, m, d] = dayParts(n); return `${d} ${MONTHS_SHORT[m]} ${y}`; }
+function fmtDayShort(n) { const [, m, d] = dayParts(n); return `${DAYS_SHORT[weekday(n)]} ${d} ${MONTHS_SHORT[m]}`; }
+
+/* ---------- Issues ---------- */
+
+// The fingerprint identifies an issue across reloads: its type, the row it is
+// about (id, or source + row when there is no id; date for KPI issues) and
+// the values that caused it. Change the data and the fingerprint changes.
+function makeIssue({ severity, code, src, row = null, field = null, message, values = [], day = null, sheetRow, id }) {
+  const issueId = id ?? (row ? row.id : "");
+  const where = issueId || (day !== null ? `${src.label}@${dayToISO(day)}` : `${src.label}#${sheetRow ?? row?._sheetRow ?? "file"}`);
+  return {
+    severity, code, field, message, values,
+    source: src.label,
+    sourceIdx: src._idx,
+    sheetRow: sheetRow ?? (row ? row._sheetRow : null),
+    id: issueId,
+    rowKey: row ? row._key : null,
+    day,
+    fingerprint: [code, where, day !== null ? dayToISO(day) : "", ...values.map(v => String(v ?? ""))].join("|"),
+  };
+}
+
+/* ---------- Load + merge + validate ---------- */
+
+function normHeader(h) { return h.trim().toLowerCase().replace(/[\s-]+/g, "_"); }
+
+// Case- and spacing-insensitive match against an allowed list.
+// Returns the canonical value, "" for blank, or null if not allowed.
+function canonical(list, value) {
+  const v = value.trim().replace(/\s+/g, " ");
+  if (!v) return "";
+  const lower = v.toLowerCase();
+  return list.find(x => x.toLowerCase() === lower) ?? null;
+}
+
+function looksLikeDate(s) { return /\d{1,4}[\/.\-]\d{1,2}[\/.\-]\d{1,4}/.test(s); }
+
+/**
+ * Campaign and seasonal moment rows.
+ * sources: [{ label, text, origin, kind?: "moments"|"vertical", loadError?, _idx }]
+ * options: { informationalAudiences: ["Brand", "City"] }
+ * Returns { rows, byKey, byId, issues, summaries }.
+ * Every non-blank CSV row becomes a row object, whatever its problems.
+ */
+function buildPlan(sources, options = {}) {
+  const informational = options.informationalAudiences || [];
+  const rows = [];
+  const issues = [];
+  const summaries = [];
+  const add = (o) => { const i = makeIssue(o); issues.push(i); if (o.row) o.row._issues.push(i); return i; };
+
+  for (const src of sources) {
+    const summary = {
+      label: src.label, origin: src.origin, sourceIdx: src._idx, kind: src.kind || null, kindInferred: !src.kind,
+      rowCount: 0, blankRows: 0, missingOptional: [], loadError: src.loadError || null,
+    };
+    summaries.push(summary);
+    if (src.loadError) { add({ severity: "error", code: "load_failed", src, message: `Could not load: ${src.loadError}`, values: [src.loadError] }); continue; }
+
+    const { records, unterminated } = src._records ? { records: src._records, unterminated: src._unterminated } : parseCSV(src.text || "");
+    if (unterminated) add({ severity: "error", code: "unterminated_quote", src, message: "File ends inside a quoted cell (a \" is missing its closing quote). The last row may be incomplete." });
+    if (records.every(r => r.every(c => !c.trim()))) { summary.empty = true; continue; }   // empty tab: 0 rows
+    if (records[0].every(c => !c.trim())) {
+      add({ severity: "error", code: "empty_file", src, message: "The first row is blank: the header row should be row 1." });
+      continue;
+    }
+
+    const header = records[0].map(normHeader);
+    const colIndex = {};
+    header.forEach((h, i) => { if (h && !(h in colIndex)) colIndex[h] = i; });
+    const missingRequired = REQUIRED_COLUMNS.filter(c => !(c in colIndex));
+    summary.missingOptional = COLUMNS.filter(c => !(c in colIndex) && !REQUIRED_COLUMNS.includes(c));
+    const extra = header.filter(h => h && !COLUMNS.includes(h));
+    if (missingRequired.length) add({ severity: "error", code: "missing_columns", src, message: `Header is missing required column${missingRequired.length > 1 ? "s" : ""}: ${missingRequired.join(", ")}`, values: missingRequired });
+    if (extra.length) add({ severity: "warning", code: "unknown_columns", src, message: `Header has unknown column${extra.length > 1 ? "s" : ""} (ignored): ${extra.join(", ")}`, values: extra });
+
+    const fileRows = [];
+    for (let r = 1; r < records.length; r++) {
+      const cells = records[r];
+      const get = c => (c in colIndex ? (cells[colIndex[c]] ?? "") : "").trim();
+      const values = {};
+      COLUMNS.forEach(c => { values[c] = get(c); });
+
+      // Blank rows, including template rows where only the pre-filled tier/vertical are set.
+      // Anything else (even content only in unknown columns) is kept so it gets flagged.
+      const prefilled = new Set(["tier", "vertical"].map(c => colIndex[c]));
+      if (!cells.some((c, i) => c.trim() && !prefilled.has(i))) { summary.blankRows++; continue; }
+
+      const row = {
+        ...values,
+        _key: `${src._idx}:${r + 1}`,
+        _source: src.label,
+        _sourceIdx: src._idx,
+        _sheetRow: r + 1,       // header is sheet row 1
+        _issues: [],
+        _parent: null,
+        _children: [],
+      };
+      if (cells.length > header.length && cells.slice(header.length).some(c => c.trim())) {
+        add({ severity: "warning", code: "extra_cells", src, row, message: `Row has ${cells.length} cells but the header has ${header.length}; the extra cells were ignored. Check for a missing quote.`, values: [cells.length] });
+      }
+      fileRows.push(row);
+    }
+    summary.rowCount = fileRows.length;
+
+    // Work out what kind of file this is
+    if (!summary.kind) {
+      const moments = fileRows.filter(r => canonical(ALLOWED.tier, r.tier) === MOMENT).length;
+      summary.kind = fileRows.length && moments > fileRows.length / 2 ? "moments" : "vertical";
+    }
+    fileRows.forEach(r => { r._fileKind = summary.kind; });
+    rows.push(...fileRows);
+  }
+
+  /* ---- Per-row checks ---- */
+  const srcOf = r => sources.find(s => s._idx === r._sourceIdx);
+  const checkList = (r, src, field, list, required) => {
+    const raw = r[field];
+    const c = canonical(list, raw);
+    if (c === null) {
+      add({ severity: "error", code: "invalid_value", src, row: r, field, message: `${field} "${raw}" is not an allowed value. Allowed: ${list.join(", ")}.`, values: [field, raw] });
+      r[`_bad_${field}`] = true;
+    } else {
+      r[field] = c;
+      if (!c && required) add({ severity: "error", code: "missing_value", src, row: r, field, message: `Missing ${field}.`, values: [field] });
+    }
+  };
+
+  for (const r of rows) {
+    const src = srcOf(r);
+
+    if (!r.id) add({ severity: "error", code: "missing_id", src, row: r, field: "id", message: "Missing id." });
+    if (!r.name) add({ severity: "error", code: "missing_name", src, row: r, field: "name", message: "Missing name." });
+
+    checkList(r, src, "tier", ALLOWED.tier, true);
+    // On a vertical's tab a blank vertical means the tab's vertical.
+    if (!r.vertical && src.tabVertical && canonical(ALLOWED.tier, r.tier) !== MOMENT) r.vertical = src.tabVertical;
+    checkList(r, src, "vertical", ALLOWED.vertical, true);
+    if (src.tabVertical && r.vertical && !r._bad_vertical && r.tier !== MOMENT && r.vertical !== src.tabVertical) {
+      add({ severity: "warning", code: "vertical_mismatch", src, row: r, field: "vertical", message: `Vertical is "${r.vertical}" but this is the ${src.tabVertical} tab.`, values: [r.vertical, src.tabVertical] });
+    }
+    checkList(r, src, "status", ALLOWED.status, true);
+    const isMoment = r.tier === MOMENT;
+    // Moments hold MarCom's moment type in campaign_type (any value); campaigns use the strict list.
+    if (!isMoment) checkList(r, src, "campaign_type", ALLOWED.campaign_type, !!r.tier && !r._bad_tier);
+    // Priority: T1-T3 for moments, P0-P3 for campaigns. Optional.
+    if (r.tier) checkList(r, src, "priority", isMoment ? ALLOWED.priority_moment : ALLOWED.priority_campaign, false);
+    checkList(r, src, "date_confidence", ALLOWED.date_confidence, false);
+    r._tentative = isMoment && !!r.date_confidence && !FIRM_DATE_CONFIDENCE.includes(r.date_confidence);
+
+    // relevant_verticals: blank or "All" = every vertical. Informational values
+    // (Brand, City) are kept but don't match a vertical. Anything else is a warning.
+    r._relevantAll = false; r._relevant = new Set(); r._audiences = [];
+    const relParts = r.relevant_verticals.split(";").map(s => s.trim()).filter(Boolean);
+    if (!relParts.length) r._relevantAll = true;
+    for (const part of relParts) {
+      if (part.toLowerCase() === "all") { r._relevantAll = true; continue; }
+      const v = canonical(ALLOWED.vertical, part);
+      if (v) { r._relevant.add(v); continue; }
+      const info = canonical(informational, part);
+      if (info) { r._audiences.push(info); continue; }
+      r._audiences.push(part);
+      add({ severity: "warning", code: "unknown_relevant_vertical", src, row: r, field: "relevant_verticals", message: `relevant_verticals has "${part}", which is not a vertical or a known audience (${informational.join(", ") || "none configured"}).`, values: [part] });
+    }
+
+    // Tier vs file kind
+    if (isMoment && r._fileKind === "vertical") {
+      add({ severity: "error", code: "moment_in_vertical_file", src, row: r, field: "tier", message: "Seasonal moment found in a vertical file. Moments belong only in the shared Seasonal Moments sheet." });
+    } else if ((r.tier === BRAND || r.tier === TACTICAL) && r._fileKind === "moments") {
+      add({ severity: "error", code: "campaign_in_moments_file", src, row: r, field: "tier", message: `${r.tier} found in the Seasonal Moments file. Campaigns belong in their vertical's sheet.`, values: [r.tier] });
+    }
+
+    // Dates
+    r._start = null; r._end = null;
+    for (const [field, key] of [["start_date", "_start"], ["end_date", "_end"]]) {
+      const raw = r[field];
+      if (!raw) { add({ severity: "error", code: "missing_date", src, row: r, field, message: `Missing ${field}.`, values: [field] }); continue; }
+      let d = parseISODate(raw);
+      if (d === null && (d = parseSlashDate(raw)) !== null) {
+        add({ severity: "warning", code: "date_format", src, row: r, field, message: `${field} "${raw}" was read as ${fmtDay(d)} (day/month/year). Use YYYY-MM-DD so it can't be misread.`, values: [field, raw] });
+      }
+      if (d === null) {
+        const hint = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? "is not a real calendar date" : looksLikeDate(raw) ? "must be in YYYY-MM-DD format (or D/M/YYYY)" : "is not a date";
+        add({ severity: "error", code: "invalid_date", src, row: r, field, message: `${field} "${raw}" ${hint}.`, values: [field, raw] });
+        r[`_bad_${field}`] = true;
+      } else r[key] = d;
+    }
+    if (r._start !== null && r._end !== null && r._end < r._start) {
+      add({ severity: "error", code: "end_before_start", src, row: r, field: "end_date", message: `end_date ${r.end_date} is before start_date ${r.start_date}.`, values: [r.start_date, r.end_date] });
+      r._bad_end_date = true;
+    }
+
+    // id format (warning)
+    if (r.id && r.tier) {
+      if (isMoment) {
+        if (!/^SM-\d{3,}$/i.test(r.id)) add({ severity: "warning", code: "id_pattern", src, row: r, field: "id", message: `id "${r.id}" doesn't follow the SM-001 pattern for seasonal moments.`, values: [r.tier, r.vertical] });
+      } else if (VERTICAL_CODES[r.vertical]) {
+        const code = VERTICAL_CODES[r.vertical], tc = TIER_ID_CODES[r.tier];
+        if (!new RegExp(`^${code}-${tc}-\\d{3,}$`, "i").test(r.id)) {
+          add({ severity: "warning", code: "id_pattern", src, row: r, field: "id", message: `id "${r.id}" doesn't follow ${code}-${tc}-001 for a ${r.tier} in ${r.vertical}.`, values: [r.tier, r.vertical] });
+        }
+      }
+    }
+
+    // Budget (warning)
+    r._budget = null;
+    if (r.budget_qar) {
+      const n = Number(r.budget_qar.replace(/[,\s]/g, "").replace(/^QAR/i, ""));
+      if (Number.isFinite(n)) r._budget = n;
+      else add({ severity: "warning", code: "budget_nan", src, row: r, field: "budget_qar", message: `budget_qar "${r.budget_qar}" is not a number.`, values: [r.budget_qar] });
+    }
+
+    r._channels = r.channels ? r.channels.split(";").map(s => s.trim()).filter(Boolean) : [];
+  }
+
+  /* ---- Cross-row checks ---- */
+  const byKey = new Map(rows.map(r => [r._key, r]));
+  const byId = new Map();   // UPPERCASE id -> [rows], in load order
+  for (const r of rows) {
+    if (!r.id) continue;
+    const k = r.id.toUpperCase();
+    if (!byId.has(k)) byId.set(k, []);
+    byId.get(k).push(r);
+  }
+  const where = r => `${r._source} row ${r._sheetRow}`;
+  for (const [, list] of byId) {
+    if (list.length < 2) continue;
+    for (const r of list) {
+      const others = list.filter(o => o !== r).map(where);
+      add({ severity: "error", code: "duplicate_id", src: srcOf(r), row: r, field: "id", message: `Duplicate id "${r.id}": also used in ${others.join("; ")}.`, values: [r._source, ...others] });
+    }
+  }
+
+  for (const r of rows) {
+    const src = srcOf(r);
+    if (!r.parent_id) {
+      if (r.tier === TACTICAL) add({ severity: "warning", code: "tactical_no_parent", src, row: r, field: "parent_id", message: "Tactical campaign has no parent. Link it to a brand campaign or seasonal moment." });
+      continue;
+    }
+    if (r.tier === MOMENT) {
+      add({ severity: "warning", code: "moment_has_parent", src, row: r, field: "parent_id", message: `Seasonal moments don't have parents; parent_id "${r.parent_id}" is ignored.`, values: [r.parent_id] });
+      continue;
+    }
+    const candidates = byId.get(r.parent_id.toUpperCase());
+    if (!candidates) {
+      add({ severity: "error", code: "parent_not_found", src, row: r, field: "parent_id", message: `parent_id "${r.parent_id}" doesn't match any id in the loaded files.`, values: [r.parent_id] });
+      r._bad_parent_id = true;
+      continue;
+    }
+    const p = candidates[0];
+    if (p === r) { add({ severity: "error", code: "self_parent", src, row: r, field: "parent_id", message: "Row is its own parent." }); r._bad_parent_id = true; continue; }
+    r._parent = p._key;
+    p._children.push(r._key);
+
+    if (r.tier === BRAND && p.tier !== MOMENT) {
+      add({ severity: "warning", code: "parent_wrong_tier", src, row: r, field: "parent_id", message: `Brand campaign's parent should be a seasonal moment, but ${p.id} is a ${p.tier || "row with no tier"}.`, values: [p.id, p.tier] });
+    } else if (r.tier === TACTICAL && p.tier !== MOMENT && p.tier !== BRAND) {
+      add({ severity: "warning", code: "parent_wrong_tier", src, row: r, field: "parent_id", message: `Tactical campaign's parent should be a brand campaign or seasonal moment, but ${p.id} is a ${p.tier || "row with no tier"}.`, values: [p.id, p.tier] });
+    }
+
+    if (r._start !== null && r._end !== null && p._start !== null && p._end !== null &&
+        (r._start < p._start || r._end > p._end)) {
+      const parts = [];
+      if (r._start < p._start) parts.push(`starts ${r.start_date}, before its parent starts (${p.start_date})`);
+      if (r._end > p._end) parts.push(`ends ${r.end_date}, after its parent ends (${p.end_date})`);
+      add({ severity: "warning", code: "outside_parent", src, row: r, field: "start_date", message: `Dates fall outside parent ${p.id} "${p.name}": ${parts.join("; ")}.`, values: [p.id, r.start_date, r.end_date, p.start_date, p.end_date] });
+    }
+  }
+
+  return { rows, byKey, byId, issues, summaries };
+}
+/* ---------- KPI forecasts ---------- */
+
+// Forecasting engine export, read in its native layout:
+//   row 1  title, e.g. "LAYER 1 — Orders & GMV | 180-Day Tracking" (skipped)
+//   row 2  header (cells contain line breaks and "Err%" repeats, so columns are read by position)
+//   row 3+ one row per day
+// Column 2 (Day) and the Err% columns are ignored: weekdays come from the date
+// and attainment is recalculated.
+const ENGINE_LAYOUT = {
+  date: 0,
+  kpis: {
+    orders:  { bear: 2, forecast: 3, bull: 4, actual: 5 },
+    gmv_qar: { bear: 9, forecast: 10, bull: 11, actual: 12 },
+  },
+  firstDataRow: 3,   // sheet row of the first day
+};
+const KPI_TOTAL = "Total";
+const SCENARIO_FIELDS = ["forecast", "bear", "bull", "actual"];
+
+Object.assign(ISSUE_TYPES, {
+  kpi_not_kpi_file: "KPI source isn't in a known KPI layout",
+  kpi_layout: "KPI tab isn't in the engine layout",
+  kpi_vertical_unset: "KPI file's vertical isn't set",
+  kpi_duplicate_source: "Two KPI files for the same vertical",
+  kpi_unknown_vertical: "Unknown vertical in a KPI source",
+  kpi_unknown_kpi: "Unknown KPI",
+  kpi_bad_date: "Unreadable KPI date",
+  kpi_bad_number: "Unreadable KPI number",
+  kpi_duplicate_date: "Duplicate KPI date",
+  kpi_gap: "Gap in the KPI dates",
+  kpi_forecast_range: "Forecast outside the bear–bull range",
+  kpi_missing_actual: "Past day with no actual",
+});
+
+// Numbers may carry thousands separators and quotes ("101,623", "10,077,762.51").
+// Returns null for blank, NaN for anything unreadable.
+// "102.9%" -> 1.029.
+function parseNumber(s) {
+  let t = String(s ?? "").replace(/["'\s,]/g, "");
+  if (!t) return null;
+  const pct = t.endsWith("%");
+  if (pct) t = t.slice(0, -1);
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(t)) return NaN;
+  return Number(pct ? `${t}e-2` : t);   // "102.9e-2" parses exactly; 102.9 / 100 doesn't
+}
+function parseAnyDate(s) { const t = s.trim(); return parseISODate(t) ?? parseDMYDate(t); }
+// D/M/YYYY (day first), e.g. 5/11/2026 = 5 Nov 2026. Accepted, but flagged:
+// a typed date like this is easy to misread as month-first.
+function parseSlashDate(s) {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s.trim());
+  if (!m || !validYMD(+m[3], +m[2] - 1, +m[1])) return null;
+  return dayFromYMD(+m[3], +m[2] - 1, +m[1]);
+}
+
+// What kind of file is this? Decided from the contents, never the file name.
+function detectFileType(records) {
+  const first = (records[0] || []).map(c => c.trim());
+  const second = (records[1] || []).map(c => c.trim());
+  if (/^layer\b/i.test(first[0] || "")) return "kpi_engine";
+  if ((second[0] || "").toLowerCase() === "date" && /bear/i.test(second[2] || "")) return "kpi_engine";
+  const h = first.map(normHeader);
+  if (h.includes("date") && h.includes("kpi") && (h.includes("forecast") || h.includes("actual"))) return "kpi_long";
+  return "plan";
+}
+function engineLayer(records) {
+  const m = /layer\s*(\d+)/i.exec((records[0] || [])[0] || "");
+  return m ? +m[1] : null;
+}
+// The vertical an engine file belongs to: the config entry wins, else Layer 1 = Total.
+function engineVertical(src, records) {
+  if (src.vertical) return src.vertical;
+  const layer = engineLayer(records);
+  return layer === 1 || layer === null ? KPI_TOTAL : null;
+}
+const KPI_VERTICALS = () => [KPI_TOTAL, ...ALLOWED.vertical.filter(v => v !== "Cross-vertical")];
+
+/**
+ * KPI sources: forecasting engine exports and long-format files
+ * (date, vertical, kpi, forecast, forecast_bear, forecast_bull, actual).
+ * Long-format actuals override the engine's for the same date, vertical and KPI;
+ * their forecast (with its bear and bull) only fills days that have no forecast.
+ * options: { kpiDefinitions, kpiStatus: { mode, thresholdPct }, today }
+ */
+function buildKpi(sources, options = {}) {
+  const defs = options.kpiDefinitions || {};
+  const baseKpis = Object.keys(defs).filter(k => !defs[k].derived);
+  const today = options.today ?? todayDay();
+  const issues = [], summaries = [];
+  const add = (o) => { const i = makeIssue(o); issues.push(i); return i; };
+  const verticals = new Map();   // vertical -> { name, sources: [sourceIdx], statusMode, series: Map(kpi -> Map(day -> point)) }
+  const knownVerticals = KPI_VERTICALS();
+
+  const vEntry = (name, statusMode) => {
+    if (!verticals.has(name)) verticals.set(name, { name, sources: [], statusMode: statusMode || null, series: new Map(baseKpis.map(k => [k, new Map()])) });
+    const v = verticals.get(name);
+    if (statusMode && !v.statusMode) v.statusMode = statusMode;
+    return v;
+  };
+  const checkRange = (src, p, kpi, day, sheetRow, vertical) => {
+    if (p.forecast == null || p.bear == null || p.bull == null) return;
+    const lo = Math.min(p.bear, p.bull), hi = Math.max(p.bear, p.bull);
+    if (p.forecast < lo || p.forecast > hi) {
+      add({ severity: "warning", code: "kpi_forecast_range", src, day, sheetRow, field: kpi, id: vertical,
+        message: `${defs[kpi]?.label || kpi} forecast ${fmtNum(p.forecast)} on ${fmtDay(day)} is outside the bear–bull range (${fmtNum(p.bear)} – ${fmtNum(p.bull)}).`,
+        values: [kpi, p.bear, p.forecast, p.bull] });
+    }
+  };
+  const flagGaps = (src, days, sheetRowOf, vertical) => {
+    const sorted = [...days].sort((a, b) => a - b);
+    for (let i = 1; i < sorted.length; i++) {
+      const missing = sorted[i] - sorted[i - 1] - 1;
+      if (missing > 0) {
+        const from = sorted[i - 1] + 1, to = sorted[i] - 1;
+        add({ severity: "warning", code: "kpi_gap", src, day: from, sheetRow: sheetRowOf(sorted[i]), id: vertical,
+          message: `No rows for ${missing === 1 ? fmtDay(from) : `${fmtDay(from)} – ${fmtDay(to)} (${missing} days)`}.`, values: [dayToISO(from), dayToISO(to)] });
+      }
+    }
+  };
+
+  const engines = sources.filter(s => s._fileType === "kpi_engine");
+  const longs = sources.filter(s => s._fileType === "kpi_long");
+
+  /* ---- Engine exports ---- */
+  for (const src of engines) {
+    const records = src._records;
+    const layer = engineLayer(records);
+    let vertical = engineVertical(src, records);
+    const summary = { label: src.label, origin: src.origin, sourceIdx: src._idx, kind: "kpi_engine", layer, vertical: null, rowCount: 0, blankRows: 0, firstDay: null, lastDay: null };
+    summaries.push(summary);
+    if (!vertical) {
+      add({ severity: "warning", code: "kpi_vertical_unset", src, sheetRow: 1,
+        message: `Layer ${layer ?? "?"} KPI file with no vertical set. Add a KPI entry for this file in the config with its vertical; shown as "Unassigned" until then.`, values: [layer] });
+      vertical = "Unassigned";
+    } else if (!knownVerticals.some(k => k.toLowerCase() === vertical.toLowerCase())) {
+      add({ severity: "warning", code: "kpi_unknown_vertical", src, sheetRow: 1, message: `KPI vertical "${vertical}" isn't a known vertical (${knownVerticals.join(", ")}).`, values: [vertical] });
+    } else vertical = knownVerticals.find(k => k.toLowerCase() === vertical.toLowerCase());
+    summary.vertical = vertical;
+    const ve = verticals.get(vertical);
+    if (ve && ve.sources.some(i => sources.find(s => s._idx === i)?._fileType === "kpi_engine")) {
+      const other = sources.find(s => s._idx === ve.sources[0]);
+      add({ severity: "error", code: "kpi_duplicate_source", src, sheetRow: 1,
+        message: `Another engine file for ${vertical} is already loaded (${other?.label}). This one was ignored; remove one of them.`, values: [vertical, other?.label] });
+      summary.ignored = true;
+      continue;
+    }
+    const v = vEntry(vertical, src.statusMode);
+    v.sources.push(src._idx);
+    // Layout check: title in row 1, header starting "Date" in row 2.
+    const headerCell = ((records[1] || [])[0] || "").trim();
+    if (headerCell.toLowerCase() !== "date") {
+      add({ severity: "error", code: "kpi_layout", src, sheetRow: 2, id: vertical,
+        message: `Expected the engine layout: a title in row 1 and a header starting with "Date" in row 2, then one row per day. Row 2 starts with "${headerCell}".`, values: [headerCell] });
+    }
+
+    const seen = new Map();   // day -> sheet row
+    for (let r = 2; r < records.length; r++) {
+      const cells = records[r];
+      const sheetRow = r + 1;
+      if (!cells.some(c => c.trim())) { summary.blankRows++; continue; }
+      const raw = (cells[ENGINE_LAYOUT.date] || "").trim();
+      let day = parseAnyDate(raw);
+      if (day === null && (day = parseSlashDate(raw)) !== null) {
+        add({ severity: "warning", code: "date_format", src, day, sheetRow, id: vertical, message: `Date "${raw}" was read as ${fmtDay(day)} (day/month/year). The engine format is DD-Mmm-YY, e.g. 14-May-26.`, values: [raw] });
+      }
+      if (day === null) {
+        add({ severity: "error", code: "kpi_bad_date", src, sheetRow, id: vertical, message: `Date "${raw}" can't be read. Expected DD-Mmm-YY, e.g. 14-May-26.`, values: [raw] });
+        continue;
+      }
+      if (seen.has(day)) {
+        add({ severity: "error", code: "kpi_duplicate_date", src, day, sheetRow, id: vertical, message: `${fmtDay(day)} appears more than once (rows ${seen.get(day)} and ${sheetRow}); the first row is used.`, values: [seen.get(day), sheetRow] });
+        continue;
+      }
+      seen.set(day, sheetRow);
+      summary.rowCount++;
+      for (const [kpi, cols] of Object.entries(ENGINE_LAYOUT.kpis)) {
+        if (!v.series.has(kpi)) v.series.set(kpi, new Map());
+        const p = { forecast: null, bear: null, bull: null, actual: null, rows: {} };
+        for (const f of SCENARIO_FIELDS) {
+          const n = parseNumber(cells[cols[f]]);
+          if (Number.isNaN(n)) {
+            add({ severity: "error", code: "kpi_bad_number", src, day, sheetRow, field: kpi, id: vertical,
+              message: `${defs[kpi]?.label || kpi} ${f} "${cells[cols[f]]}" on ${fmtDay(day)} isn't a number.`, values: [kpi, f, cells[cols[f]]] });
+          } else p[f] = n;
+        }
+        p.rows.forecast = { sourceIdx: src._idx, sheetRow };
+        if (p.actual !== null) p.rows.actual = { sourceIdx: src._idx, sheetRow };
+        v.series.get(kpi).set(day, p);
+        checkRange(src, p, kpi, day, sheetRow, vertical);
+      }
+    }
+    const days = [...seen.keys()];
+    if (days.length) { summary.firstDay = Math.min(...days); summary.lastDay = Math.max(...days); }
+    flagGaps(src, days, d => seen.get(d), vertical);
+  }
+
+  /* ---- Long-format files ---- */
+  for (const src of longs) {
+    const records = src._records;
+    const summary = { label: src.label, origin: src.origin, sourceIdx: src._idx, kind: "kpi_long", vertical: null, verticalsSeen: new Set(), rowCount: 0, blankRows: 0, firstDay: null, lastDay: null };
+    summaries.push(summary);
+    const header = records[0].map(normHeader);
+    const col = {};
+    header.forEach((h, i) => { if (!(h in col)) col[h] = i; });
+    const missing = ["date", "vertical", "kpi"].filter(c => !(c in col));
+    if (missing.length) {
+      add({ severity: "error", code: "missing_columns", src, sheetRow: 1, message: `KPI file is missing column${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}`, values: missing });
+      continue;
+    }
+    const get = (cells, c) => (c in col ? (cells[col[c]] ?? "") : "").trim();
+    const seen = new Map();           // "vertical|kpi|day" -> sheet row
+    const daysByKey = new Map();      // "vertical|kpi" -> Map(day -> sheetRow), for gap checks
+    const warnedVertical = new Set(), warnedKpi = new Set();
+    for (let r = 1; r < records.length; r++) {
+      const cells = records[r];
+      const sheetRow = r + 1;
+      if (!cells.some(c => c.trim())) { summary.blankRows++; continue; }
+      const rawDate = get(cells, "date");
+      let day = parseAnyDate(rawDate);
+      if (day === null && (day = parseSlashDate(rawDate)) !== null) {
+        add({ severity: "warning", code: "date_format", src, day, sheetRow, id: get(cells, "vertical"), message: `Date "${rawDate}" was read as ${fmtDay(day)} (day/month/year). Use YYYY-MM-DD.`, values: [rawDate] });
+      }
+      if (day === null) { add({ severity: "error", code: "kpi_bad_date", src, sheetRow, id: get(cells, "vertical"), message: `Date "${rawDate}" can't be read. Use YYYY-MM-DD.`, values: [rawDate] }); continue; }
+      let vertical = get(cells, "vertical") || KPI_TOTAL;
+      const known = knownVerticals.find(k => k.toLowerCase() === vertical.toLowerCase());
+      if (known) vertical = known;
+      else if (!warnedVertical.has(vertical)) {
+        warnedVertical.add(vertical);
+        add({ severity: "warning", code: "kpi_unknown_vertical", src, sheetRow, message: `KPI vertical "${vertical}" isn't a known vertical (${knownVerticals.join(", ")}).`, values: [vertical] });
+      }
+      const rawKpi = get(cells, "kpi");
+      const kpi = baseKpis.find(k => k.toLowerCase() === rawKpi.toLowerCase());
+      if (!kpi) {
+        if (!warnedKpi.has(rawKpi)) {
+          warnedKpi.add(rawKpi);
+          const derived = Object.keys(defs).find(k => k.toLowerCase() === rawKpi.toLowerCase());
+          add({ severity: "warning", code: "kpi_unknown_kpi", src, sheetRow,
+            message: derived ? `KPI "${rawKpi}" is calculated by the tracker (${defs[derived].derived.join(" ÷ ")}); rows for it are ignored.` : `KPI "${rawKpi}" isn't defined in kpiDefinitions; its rows are ignored.`, values: [rawKpi] });
+        }
+        continue;
+      }
+      const key = `${vertical}|${kpi}|${day}`;
+      if (seen.has(key)) {
+        add({ severity: "error", code: "kpi_duplicate_date", src, day, sheetRow, field: kpi, id: vertical, message: `${vertical} ${defs[kpi].label || kpi} on ${fmtDay(day)} appears more than once (rows ${seen.get(key)} and ${sheetRow}); the first row is used.`, values: [vertical, kpi, seen.get(key), sheetRow] });
+        continue;
+      }
+      seen.set(key, sheetRow);
+      if (!daysByKey.has(`${vertical}|${kpi}`)) daysByKey.set(`${vertical}|${kpi}`, new Map());
+      daysByKey.get(`${vertical}|${kpi}`).set(day, sheetRow);
+      summary.rowCount++;
+      summary.verticalsSeen.add(vertical);
+      summary.firstDay = summary.firstDay === null ? day : Math.min(summary.firstDay, day);
+      summary.lastDay = summary.lastDay === null ? day : Math.max(summary.lastDay, day);
+
+      const vals = {};
+      for (const [f, c] of [["forecast", "forecast"], ["bear", "forecast_bear"], ["bull", "forecast_bull"], ["actual", "actual"]]) {
+        const n = parseNumber(get(cells, c));
+        if (Number.isNaN(n)) add({ severity: "error", code: "kpi_bad_number", src, day, sheetRow, field: kpi, id: vertical, message: `${c} "${get(cells, c)}" for ${vertical} ${defs[kpi].label || kpi} on ${fmtDay(day)} isn't a number.`, values: [vertical, kpi, c, get(cells, c)] });
+        else vals[f] = n;
+      }
+      const v = vEntry(vertical, src.statusMode);
+      if (!v.sources.includes(src._idx)) v.sources.push(src._idx);
+      const series = v.series.get(kpi);
+      const p = series.get(day) || { forecast: null, bear: null, bull: null, actual: null, rows: {} };
+      // A forecast and its bear/bull belong together: only fill them, as a set,
+      // when nothing has supplied a forecast for this day yet.
+      if (vals.forecast != null && p.forecast == null) {
+        p.forecast = vals.forecast; p.bear = vals.bear ?? null; p.bull = vals.bull ?? null;
+        p.rows.forecast = { sourceIdx: src._idx, sheetRow };
+      }
+      if (vals.actual != null) {
+        if (p.actual != null && p.rows.actual?.sourceIdx !== src._idx) p.actualOverridden = { was: p.actual, from: p.rows.actual };
+        p.actual = vals.actual;
+        p.rows.actual = { sourceIdx: src._idx, sheetRow };
+      }
+      if (!p.rows.forecast) p.rows.forecast = { sourceIdx: src._idx, sheetRow };
+      series.set(day, p);
+      checkRange(src, vals, kpi, day, sheetRow, vertical);
+    }
+    summary.vertical = [...summary.verticalsSeen].join(", ");
+    // Gaps only matter for files that carry forecasts, not for actuals-only overrides.
+    const hasForecasts = records.slice(1).some(c => (c[col.forecast] || "").trim());
+    if (hasForecasts) for (const [vk, m] of daysByKey) flagGaps(src, [...m.keys()], d => m.get(d), vk.split("|")[0]);
+  }
+
+  /* ---- Past days with no actual (after merging) ---- */
+  for (const v of verticals.values()) {
+    const byDay = new Map();   // day -> { kpis: [], row }
+    for (const kpi of baseKpis) {
+      for (const [day, p] of v.series.get(kpi) || []) {
+        if (day >= today || p.forecast == null || p.actual != null) continue;
+        if (!byDay.has(day)) byDay.set(day, { kpis: [], row: p.rows.forecast });
+        byDay.get(day).kpis.push(kpi);
+      }
+    }
+    for (const [day, { kpis, row }] of [...byDay].sort((a, b) => a[0] - b[0])) {
+      const src = sources.find(s => s._idx === row?.sourceIdx) || sources[0];
+      add({ severity: "warning", code: "kpi_missing_actual", src, day, sheetRow: row?.sheetRow ?? null, id: v.name,
+        message: `${v.name}: no actual for ${kpis.map(k => defs[k]?.label || k).join(" and ")} on ${fmtDayShort(day)} ${dayParts(day)[0]}.`, values: [v.name, ...kpis] });
+    }
+  }
+
+  return { verticals, defs, issues, summaries, today };
+}
+
+/* ---------- KPI calculations ---------- */
+
+const ratio = (a, b) => (a != null && b != null && b !== 0 ? a / b : null);
+
+// One day's forecast/bear/bull/actual for a KPI. Derived KPIs (AOV) are
+// recalculated from their parts; they have no bear/bull of their own.
+function kpiPoint(kpi, vertical, key, day) {
+  const def = kpi.defs[key];
+  const v = kpi.verticals.get(vertical);
+  if (!def || !v) return null;
+  if (def.derived) {
+    const [n, d] = def.derived;
+    const pn = kpiPoint(kpi, vertical, n, day), pd = kpiPoint(kpi, vertical, d, day);
+    if (!pn || !pd) return null;
+    return { forecast: ratio(pn.forecast, pd.forecast), bear: null, bull: null,
+      actual: pn.actual != null && pd.actual != null ? ratio(pn.actual, pd.actual) : null,
+      rows: pn.rows, derived: true };
+  }
+  return v.series.get(key)?.get(day) || null;
+}
+
+/**
+ * Status of an actual against its forecast.
+ *   scenarios: green >= forecast; amber < forecast but >= bear; red < bear; over = above bull
+ *   threshold: green >= forecast; amber up to t% below; red more than t% below; over = more than t% above
+ * Scenario mode needs bear and bull; without them the threshold is used.
+ * Returns { status: "over"|"green"|"amber"|"red"|"no_actual"|"none", delta, deltaPct, vsBear, vsBull, basis }.
+ */
+function kpiStatus(point, def, mode = "scenarios", thresholdPct = 5) {
+  if (!point || point.forecast == null) return { status: "none" };
+  const { forecast, bear, bull, actual } = point;
+  if (actual == null) return { status: "no_actual" };
+  const sign = def?.direction === "lower_is_better" ? -1 : 1;
+  const delta = actual - forecast;
+  const deltaPct = forecast ? delta / forecast : null;
+  const useScenarios = mode === "scenarios" && bear != null && bull != null;
+  let status, over;
+  if (useScenarios) {
+    over = sign * (actual - bull) > 0;
+    status = sign * (actual - forecast) >= 0 ? "green" : sign * (actual - bear) >= 0 ? "amber" : "red";
+  } else {
+    const t = thresholdPct / 100, rel = sign * (deltaPct ?? 0);
+    over = rel > t;
+    status = rel >= 0 ? "green" : rel >= -t ? "amber" : "red";
+  }
+  return { status: over ? "over" : status, delta, deltaPct, vsBear: ratio(actual, bear), vsBull: ratio(actual, bull), basis: useScenarios ? "scenarios" : "threshold" };
+}
+
+function kpiStatusMode(kpi, vertical, options) {
+  return kpi.verticals.get(vertical)?.statusMode || options?.mode || "scenarios";
+}
+
+/**
+ * Totals over a range of days, e.g. month-to-date or a week.
+ * Days without an actual are never counted as zero: actual, forecast, bear and
+ * bull are summed over the days that have an actual; the forecast for the
+ * other days is the "remaining" forecast used for the month-end projection.
+ *   projected = actual + remaining forecast × attainment
+ * Derived KPIs are recalculated from their summed parts.
+ */
+function kpiPeriod(kpi, vertical, key, fromDay, toDay) {
+  const def = kpi.defs[key];
+  if (!def || !kpi.verticals.get(vertical)) return null;
+  if (def.derived) {
+    const [n, d] = def.derived;
+    const a = kpiPeriod(kpi, vertical, n, fromDay, toDay), b = kpiPeriod(kpi, vertical, d, fromDay, toDay);
+    if (!a || !b) return null;
+    return {
+      derived: true, daysWithActual: a.daysWithActual, days: a.days,
+      actual: ratio(a.actual, b.actual), forecast: ratio(a.forecast, b.forecast), bear: null, bull: null,
+      forecastAll: ratio(a.forecastAll, b.forecastAll), projected: ratio(a.projected, b.projected),
+      attainment: ratio(ratio(a.actual, b.actual), ratio(a.forecast, b.forecast)), vsBear: null,
+      projectedAttainment: ratio(ratio(a.projected, b.projected), ratio(a.forecastAll, b.forecastAll)),
+    };
+  }
+  let A = 0, F = 0, B = 0, U = 0, R = 0, all = 0, n = 0, days = 0, bearOk = true, bullOk = true;
+  for (let day = fromDay; day <= toDay; day++) {
+    const p = kpiPoint(kpi, vertical, key, day);
+    if (!p || p.forecast == null) continue;
+    days++;
+    all += p.forecast;
+    if (p.actual != null) {
+      n++; A += p.actual; F += p.forecast;
+      if (p.bear == null) bearOk = false; else B += p.bear;
+      if (p.bull == null) bullOk = false; else U += p.bull;
+    } else R += p.forecast;
+  }
+  if (!days) return null;
+  const has = n > 0;
+  const attainment = has ? ratio(A, F) : null;
+  const projected = has ? A + R * attainment : null;
+  return {
+    daysWithActual: n, days,
+    actual: has ? A : null, forecast: has ? F : null,
+    bear: has && bearOk ? B : null, bull: has && bullOk ? U : null,
+    forecastAll: all, remainingForecast: R, attainment,
+    vsBear: has && bearOk ? ratio(A, B) : null,
+    projected, projectedAttainment: projected != null ? ratio(projected, all) : null,
+  };
+}
+
+// Latest day with any actual for a vertical.
+function kpiLatestActual(kpi, vertical) {
+  const v = kpi.verticals.get(vertical);
+  if (!v) return null;
+  let latest = null;
+  for (const series of v.series.values()) for (const [day, p] of series) if (p.actual != null && (latest === null || day > latest)) latest = day;
+  return latest;
+}
+
+/* ---------- Number formatting ---------- */
+
+function fmtNum(n, decimals = 0) {
+  if (n == null || Number.isNaN(n)) return "—";
+  return n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+function fmtPct(x, signed = false) {
+  if (x == null || Number.isNaN(x)) return "—";
+  const v = (x * 100).toFixed(1);
+  return `${signed && x > 0 ? "+" : ""}${v}%`;
+}
+// Value in a KPI's unit: QAR without decimals, counts with separators.
+function fmtKpi(value, def, signed = false) {
+  if (value == null || Number.isNaN(value)) return "—";
+  const s = `${signed && value > 0 ? "+" : ""}${fmtNum(Math.round(value))}`;
+  return def?.unit === "QAR" ? `QAR ${s}` : s;
+}
+// Short form for narrow cells: 104k, 10.1M, 97. mDecimals: decimals for millions.
+function fmtCompact(value, mDecimals = 1) {
+  if (value == null || Number.isNaN(value)) return "—";
+  const a = Math.abs(value);
+  if (a >= 1e6) return `${(value / 1e6).toFixed(a >= 1e8 ? 1 : mDecimals)}M`;
+  if (a >= 1e4) return `${Math.round(value / 1e3)}k`;
+  if (a >= 1e3) return `${(value / 1e3).toFixed(1)}k`;
+  return fmtNum(value);
+}
+
+/* ---------- Sources from the config ---------- */
+
+const normName = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+// "S Laundry" -> "SLaundry": tab names match verticals ignoring spaces and case.
+function canonicalVertical(name) { return ALLOWED.vertical.find(v => normName(v) === normName(name)) || null; }
+// "*L1*Total*.csv" -> regex; case-insensitive, * = anything.
+function globToRegex(glob) {
+  return new RegExp(`^${glob.split("*").map(p => p.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "i");
+}
+
+// { label, type, sheetUrl } + the spreadsheet's publishedId -> everything else:
+//   editUrl  https://docs.google.com/spreadsheets/d/<sheet id>/edit
+//   gid      the tab id from sheetUrl
+//   url      https://docs.google.com/spreadsheets/d/e/<publishedId>/pub?gid=<gid>&single=true&output=csv
+//   tabVertical  campaign tabs: the vertical named after the tab
+// Advanced overrides (url, editUrl, gid, file, vertical, statusMode) still win when given.
+const SHEETS_BASE = "https://docs.google.com/spreadsheets";
+function resolveConfigSource(c, publishedId) {
+  const sheetUrl = c.sheetUrl || "";
+  const sheetId = (/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/.exec(sheetUrl) || [])[1];
+  const gid = c.gid ?? (/[?#&]gid=(\d+)/.exec(sheetUrl) || [])[1];
+  return {
+    label: c.label,
+    type: c.type,
+    gid,
+    // Plain string joins, not `template literals`: Apps Script strips "//" comments
+    // when serving the page and mistakes a "//" inside a template literal for one.
+    editUrl: c.editUrl || (sheetId ? SHEETS_BASE + "/d/" + sheetId + "/edit" : undefined),
+    url: c.url || (publishedId && gid != null ? SHEETS_BASE + "/d/e/" + publishedId + "/pub?gid=" + gid + "&single=true&output=csv" : undefined),
+    file: c.file,
+    tabVertical: c.type === "campaigns" ? canonicalVertical(c.vertical || c.label) || c.vertical || c.label : undefined,
+    vertical: c.type === "kpi_engine" || c.type === "kpi" ? c.vertical : undefined,
+    statusMode: c.statusMode,
+  };
+}
+
+// The config entry for a loaded source. URL sources match by url. Dropped files
+// match a `file` pattern if one is set, otherwise the tab name in the file name:
+// Google names a downloaded tab "<spreadsheet> - <tab>.csv", so "… - S Market.csv"
+// and "s_market.csv" both match "S Market". The longest matching name wins.
+function configForSource(src, resolved) {
+  if (src.origin === "url") return resolved.find(c => c.url && c.url === src.url) || null;
+  if (src.origin === "appsScript") return resolved.find(c => c.label === src.label) || null;
+  const base = src.label.replace(/\.csv$/i, "");
+  const name = normName(base.includes(" - ") ? base.split(" - ").pop() : base);
+  const hits = resolved.filter(c => (c.file ? globToRegex(c.file).test(src.label) : normName(c.label) && name.includes(normName(c.label))));
+  return hits.sort((a, b) => normName(b.label).length - normName(a.label).length)[0] || null;
+}
+function applySourceConfig(src, resolved) {
+  const c = configForSource(src, resolved);
+  if (!c) return src;
+  return {
+    ...src,
+    type: c.type,
+    kind: c.type === "moments" ? "moments" : c.type === "campaigns" ? "vertical" : src.kind,
+    tabVertical: c.tabVertical,
+    vertical: c.vertical ?? src.vertical,
+    statusMode: c.statusMode ?? src.statusMode,
+  };
+}
+
+// Why a published-CSV response can't be used, or null if it can.
+// A restricted "Publish to web" link answers 401/403 or a Google sign-in page.
+const SIGN_IN_PROBLEM = "Google asked for a sign-in instead of returning the CSV. Publishing is restricted to signed-in people in your organisation, which the tracker can't use. Remove that restriction in File > Share > Publish to web (or ask your Workspace admin), or download the tabs as CSV and drop them on the page";
+function publishedCsvProblem(status, text) {
+  const isHtml = /^\s*<(!doctype|html)/i.test(text || "");
+  if (status === 401 || status === 403 || (isHtml && /sign in to access this content|accounts\.google\.com\/ServiceLogin/i.test(text))) return SIGN_IN_PROBLEM;
+  if (status >= 400) return `HTTP ${status} from Google Sheets`;
+  if (isHtml) return "got a web page instead of CSV. Use the 'Publish to web' CSV link";
+  return null;
+}
+
+/* ---------- Everything together ---------- */
+
+// Read a source's CSV once and decide what it is. Config type wins; otherwise
+// the contents decide (engine title/header, long KPI header, else plan rows).
+function classifySource(src) {
+  // A source that failed to load is reported by the plan step ("Could not load").
+  if (src.loadError) return { ...src, _fileType: "plan", _records: [] };
+  // Apps Script hands over the tab's display values as a 2D array: same pipeline, no CSV step.
+  const { records, unterminated } = src.records
+    ? { records: src.records.map(row => row.map(v => (v == null ? "" : String(v)))), unterminated: false }
+    : parseCSV(src.text || "");
+  let fileType = detectFileType(records);
+  if (src.type === "moments" || src.type === "campaigns") fileType = "plan";
+  else if (src.type === "kpi_engine") fileType = "kpi_engine";
+  else if (src.type === "kpi" && fileType === "plan") fileType = "kpi_unknown";
+  return { ...src, _records: records, _unterminated: unterminated, _fileType: fileType };
+}
+
+// Which KPI series a file feeds, so a fresh export can replace the old one
+// even when its file name differs. Returns null for non-engine files.
+function kpiIdentity(src) {
+  const c = classifySource(src);
+  return c._fileType === "kpi_engine" ? { vertical: engineVertical(src, c._records) || `layer-${engineLayer(c._records)}` } : null;
+}
+
+/**
+ * Everything loaded, merged and checked.
+ * sources: [{ label, text, origin, type?, kind?, vertical?, statusMode?, loadError? }] in load order.
+ * options: { informationalAudiences, kpiDefinitions, kpiStatus, today }
+ * Returns { rows, byKey, byId, kpi, issues, sources } where sources are per-file summaries.
+ */
+function buildDataset(sources, options = {}) {
+  const indexed = sources.map((s, i) => classifySource({ ...s, _idx: i }));
+  const planSources = indexed.filter(s => s._fileType === "plan");
+  const kpiSources = indexed.filter(s => s._fileType === "kpi_engine" || s._fileType === "kpi_long");
+  const plan = buildPlan(planSources, options);
+  const kpi = buildKpi(kpiSources, options);
+  const summaries = [...plan.summaries, ...kpi.summaries];
+  const issues = [...plan.issues, ...kpi.issues];
+  for (const s of indexed.filter(s => s._fileType === "kpi_unknown")) {
+    summaries.push({ label: s.label, origin: s.origin, sourceIdx: s._idx, kind: "kpi_unknown", rowCount: 0, blankRows: 0 });
+    issues.push(makeIssue({ severity: "error", code: "kpi_not_kpi_file", src: s, sheetRow: 1,
+      message: "Configured as a KPI source, but it's neither a forecasting engine export (title row + Date/Day/Bear header) nor a long-format file (date, vertical, kpi, forecast, actual)." }));
+  }
+  for (const s of summaries) { s.errors = 0; s.warnings = 0; }
+  for (const i of issues) {
+    const s = summaries.find(x => x.sourceIdx === i.sourceIdx);
+    if (s) s[i.severity === "error" ? "errors" : "warnings"]++;
+  }
+  // File-level first, then by source order and row
+  issues.sort((a, b) => (a.sourceIdx - b.sourceIdx) || ((a.sheetRow ?? 0) - (b.sheetRow ?? 0)) || (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1));
+  summaries.sort((a, b) => a.sourceIdx - b.sourceIdx);
+  return { rows: plan.rows, byKey: plan.byKey, byId: plan.byId, kpi, issues, sources: summaries };
+}
+
+/* CORE:END */
+
+</script>
+
+<script>
+/* ================= UI ================= */
+
+// Inside the Apps Script web app, google.script.run reads the tabs server-side.
+const IN_APPS_SCRIPT = typeof google !== "undefined" && !!(google.script && google.script.run);
+const MODE = IN_APPS_SCRIPT ? "appsScript" : CONFIG.mode === "appsScript" ? "local" : CONFIG.mode;
+// Storage can be blocked (e.g. in the Apps Script iframe). Everything that uses it must cope.
+const STORAGE_OK = (() => { try { const k = "marketingTracker.probe"; localStorage.setItem(k, k); localStorage.removeItem(k); return true; } catch { return false; } })();
+
+const STORAGE_KEY = "marketingTracker.localSources.v1";
+const VERTICAL_VAR = {
+  "S Market": "--v-smk", "Restaurants": "--v-rst", "Snoomart": "--v-snm", "Grocery": "--v-grc",
+  "SLaundry": "--v-sld", "Services": "--v-srv", "New Ventures": "--v-nvt", "Royal Club": "--v-rcl", "Snoonu Plus": "--v-spl",
+  "Cross-vertical": "--v-cvt",
+};
+const verticalColor = v => `var(${VERTICAL_VAR[v] || "--v-unknown"})`;
+
+const MOMENT_TIERS = ["T1", "T2", "T3", ""];   // "" = no tier
+function defaultFilters() {
+  return {
+    verticals: null,                          // null = all, else Set
+    tier: "", campaign_type: "", status: "", owner: "",
+    momentTiers: new Set(["T1", "T2", ""]),   // T3 hidden by default
+    showAllMoments: false,                    // ignore the vertical filter for moments
+  };
+}
+
+const state = {
+  sources: [],          // [{ label, text, origin, kind?, loadError? }]
+  data: null,           // result of buildDataset
+  view: "month",
+  issueFilter: "all",
+  cursor: todayDay(),   // day number; the month/week shown is the one containing it
+  collapsed: new Set(), // "lane|vertical" keys of collapsed vertical groups
+  filters: defaultFilters(),
+  openMenu: null,       // which filter dropdown is open: "vertical" | "moments" | null
+  visibleKeys: new Set(), // rows passing the filters, recomputed on every render
+  panelKey: null,       // row shown in the side panel
+  printWidth: null,     // px width of the printable area while printing
+  kpiShow: new Set(Object.keys(CONFIG.kpiDefinitions)),   // KPI rows shown in the month strip
+  tint: false,          // tint month days by orders status
+  panelDay: null,       // day shown in the side panel (day number)
+  panelBackDay: null,   // day panel to return to from an initiative opened there
+  dismissals: loadDismissals(),   // fingerprint -> { note, at, ... }
+  dismissForm: null,    // { anchor, fingerprints } while the dismiss note form is open
+  dismissedOpen: false,
+  handles: new Map(),   // file name -> FileSystemFileHandle (Chrome/Edge)
+};
+
+const $ = sel => document.querySelector(sel);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* ---------- Loading ---------- */
+
+function storageGet() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch { return null; }
+}
+function storageSet(v) {
+  try { v ? localStorage.setItem(STORAGE_KEY, JSON.stringify(v)) : localStorage.removeItem(STORAGE_KEY); } catch { /* storage unavailable */ }
+}
+
+async function addFiles(fileList, handles = new Map()) {
+  for (const f of [...fileList].filter(f => /\.json$/i.test(f.name))) await importDismissals(f);
+  const files = [...fileList].filter(f => /\.csv$/i.test(f.name) || f.type === "text/csv");
+  if (!files.length) return;
+  for (const f of files) {
+    const h = handles.get(f.name);
+    if (h) { state.handles.set(f.name, h); handleStore.put(f.name, h); }
+  }
+  const loaded = await Promise.all(files.map(f => f.text().then(
+    text => ({ label: f.name, text, origin: "file" }),
+    err => ({ label: f.name, text: "", origin: "file", loadError: String(err) }),
+  )));
+  // A file with the same name replaces the earlier one, so re-dropping an updated export just works.
+  // A KPI engine export also replaces the previous export for the same vertical, whatever its name.
+  for (const s of loaded) {
+    const id = s.loadError ? null : kpiIdentity(withConfig(s));
+    if (id) state.sources = state.sources.filter(x => x.label === s.label || x.origin !== "file" || kpiIdentity(withConfig(x))?.vertical !== id.vertical);
+    const i = state.sources.findIndex(x => x.label === s.label);
+    if (i >= 0) state.sources[i] = s; else state.sources.push(s);
+  }
+  if (MODE === "local") storageSet(state.sources.filter(s => s.origin === "file" && !s.loadError).map(({ label, text }) => ({ label, text })));
+  rebuild();
+}
+
+async function loadUrls() {
+  state.loading = true;
+  render();
+  const fetched = await Promise.all(configuredSources().filter(s => s.url).map(fetchUrlSource));
+  state.loading = false;
+  // Keep any files dropped on top of the URL sources
+  state.sources = [...fetched, ...state.sources.filter(s => s.origin === "file")];
+  rebuild();
+}
+
+function clearData() {
+  state.sources = state.sources.filter(s => s.origin === "url");
+  storageSet(null);
+  state.handles = new Map();
+  handleStore.clear();
+  rebuild();
+}
+
+/* ---------- Config matching ---------- */
+
+// CONFIG.sources resolved into urls, edit links and verticals (see resolveConfigSource).
+// In the Apps Script web app the edit link and each tab's gid come from the spreadsheet itself.
+const configuredSources = () => CONFIG.sources.map(c => {
+  const r = resolveConfigSource(c, CONFIG.publishedId);
+  const info = state.sheetInfo;
+  if (info) {
+    r.editUrl = (/^(.*?\/edit)/.exec(info.url) || [])[1] || info.url.replace(/[?#].*$/, "");
+    const tab = info.tabs.find(t => normName(t.name) === normName(c.label));
+    if (tab) r.gid = String(tab.gid);
+  }
+  return r;
+});
+const configFor = src => configForSource(src, configuredSources());
+// Source as handed to the core: type, vertical and status mode from its config entry.
+const withConfig = src => applySourceConfig(src, configuredSources());
+const coreOptions = () => ({
+  informationalAudiences: CONFIG.informationalAudiences,
+  kpiDefinitions: CONFIG.kpiDefinitions,
+  kpiStatus: CONFIG.kpiStatus,
+  today: todayDay(),
+});
+
+function rebuild() {
+  state.data = buildDataset(state.sources.map(withConfig), coreOptions());
+  render();
+}
+
+/* ---------- Rendering ---------- */
+
+function render() {
+  renderLoaderBar();
+  const has = state.sources.length > 0;
+  const allFailed = has && state.sources.every(s => s.loadError);
+  $("#emptyState").classList.toggle("hidden", has && !allFailed);
+  $("#emptyState").innerHTML = state.loading && !has
+    ? `<h2>Loading the marketing plan…</h2><p>Reading ${MODE === "appsScript" ? CONFIG.sources.length : configuredSources().filter(c => c.url).length} tabs from Google Sheets.</p>`
+    : allFailed
+    ? `<h2>Couldn't load the Google Sheets</h2><p>${esc(state.sources[0].loadError.replace(/^./, c => c.toUpperCase()))}.</p>
+       <p>${state.sources[0].loadError === SIGN_IN_PROBLEM ? "Once the links are public, click Reload data." : MODE === "appsScript" ? "Click Reload data to try again, or drop CSV exports of the tabs here instead." : "Check your connection and click Reload data, or drop CSV exports of the tabs here instead."}</p>
+       <button data-action="reload">Reload data</button> <button class="primary" data-action="pick">Choose CSV files</button>`
+    : `<h2>Load your marketing plan</h2><p>Drop the CSV exports here: the Seasonal Moments tab, one tab per vertical, and the KPI forecast.</p>
+       <button class="primary" data-action="pick">Choose CSV files</button>`;
+  $("#sourcesCard").classList.toggle("hidden", !has);
+  $("#issuesCard").classList.toggle("hidden", !has);
+  $("#filtersCard").classList.toggle("hidden", !has);
+  document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
+  document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.view === state.view)));
+  if (!has) return;
+  computeVisible();
+  renderSources();
+  renderIssues();
+  renderFilters();
+  renderActualsThrough();
+  renderPrintHeader();
+  const viewEl = { month: "#viewMonth", week: "#viewWeek", data: "#viewData" }[state.view];
+  $(viewEl).classList.remove("hidden");
+  if (state.view === "data") renderData();
+  else if (state.view === "month") renderMonth();
+  else if (state.view === "week") renderWeek();
+  renderPanel();
+}
+
+/* ---------- Monthly roadmap ---------- */
+
+const LANES = [
+  { tier: MOMENT, title: "Seasonal Moments", empty: "No seasonal moments this month" },
+  { tier: BRAND, title: "Brand Campaigns", empty: "No brand campaigns this month" },
+  { tier: TACTICAL, title: "Tactical Campaigns", empty: "No tactical campaigns this month" },
+];
+const STATUS_LABELS = ["Idea", "Planning", "Live", "Complete", "Paused"];
+
+function cursorMonth() { const d = dayToDate(state.cursor); return [d.getUTCFullYear(), d.getUTCMonth()]; }
+
+let measureCtx = null;
+function textWidth(s) {
+  if (!measureCtx) {
+    measureCtx = document.createElement("canvas").getContext("2d");
+    measureCtx.font = `600 12px ${getComputedStyle(document.body).fontFamily}`;
+  }
+  return measureCtx.measureText(s).width;
+}
+
+const barName = r => r.name || r.id || "(no name)";
+
+// Greedy row packing. Each bar claims its own span plus its label when the
+// label doesn't fit inside and has to sit beside the bar.
+// rank (optional) packs lower-ranked items first, so they take the top rows.
+function packBars(items, mStart, mEnd, pxPerDay, trackPx, rank = () => 0) {
+  const sorted = [...items].sort((a, b) => rank(a) - rank(b) || a._start - b._start || b._end - a._end || barName(a).localeCompare(barName(b)));
+  const rowEnds = [], rows = [];
+  for (const r of sorted) {
+    const s = Math.max(r._start, mStart), e = Math.min(r._end, mEnd);
+    const x0 = (s - mStart) * pxPerDay, x1 = (e - mStart + 1) * pxPerDay;
+    const clipPad = (r._start < mStart ? 16 : 0) + (r._end > mEnd ? 16 : 0);
+    const labelW = textWidth(barName(r)) + 16 + clipPad + (r._issues.length ? 12 : 0);
+    let pos = "in", ext0 = x0, ext1 = x1;
+    if (labelW > x1 - x0) {
+      const outW = labelW - clipPad;
+      if (x1 + 5 + outW <= trackPx) { pos = "right"; ext1 = x1 + 5 + outW; }
+      else if (x0 - 5 - outW >= 0) { pos = "left"; ext0 = x0 - 5 - outW; }
+    }
+    let i = rowEnds.findIndex(end => end + 6 <= ext0);
+    if (i < 0) { i = rowEnds.length; rowEnds.push(0); rows.push([]); }
+    rowEnds[i] = ext1;
+    rows[i].push({ r, s, e, pos });
+  }
+  return rows;
+}
+
+const pct = (d, mStart, n) => `${((d - mStart) / n) * 100}%`;
+
+function barTitle(r) {
+  const p = r._parent ? state.data.byKey.get(r._parent) : null;
+  return [
+    barName(r),
+    `${fmtDay(r._start)} – ${fmtDay(r._end)}`,
+    [r.vertical, r.campaign_type, r.priority, r.status].filter(Boolean).join(" · "),
+    r._tentative ? `Date tentative (${r.date_confidence})` : "",
+    p ? `Parent: ${p.name || p.id}` : "",
+    r._issues.length ? `${r._issues.length} data issue${r._issues.length > 1 ? "s" : ""}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function barHTML(b, mStart, n) {
+  const { r } = b;
+  const cls = [
+    "bar",
+    `st-${STATUS_LABELS.includes(r.status) ? r.status.toLowerCase() : "none"}`,
+    r._start < b.s ? "clip-l" : "",
+    r._end > b.e ? "clip-r" : "",
+    b.pos !== "in" ? `lbl-${b.pos}` : "",
+    r._tentative ? "tentative" : "",
+  ].filter(Boolean).join(" ");
+  const width = ((b.e - b.s + 1) / n) * 100;
+  return `<button class="${cls}" data-row="${esc(r._key)}" ${r.tier === MOMENT ? `data-moment="${esc(r._key)}"` : ""}
+    style="left:${pct(b.s, mStart, n)};width:${width}%;--c:${verticalColor(r.vertical)}" title="${esc(barTitle(r))}">
+    <span class="bar-label">${issueDot(r)}${esc(barName(r))}</span></button>`;
+}
+
+function renderMonth() {
+  const [y, m] = cursorMonth();
+  const mStart = dayFromYMD(y, m, 1), mEnd = dayFromYMD(y, m + 1, 1) - 1, n = mEnd - mStart + 1;
+  const today = todayDay();
+  $("#monthTitle").textContent = `${MONTHS_LONG[m]} ${y}`;
+  $("#monthJump").value = `${y}-${String(m + 1).padStart(2, "0")}`;
+
+  const allRows = state.data.rows;
+  const rows = allRows.filter(passes);
+  const dated = rows.filter(r => r._start !== null && r._end !== null);
+  const undated = rows.filter(r => r._start === null || r._end === null);
+  const inMonth = dated.filter(r => r._start <= mEnd && r._end >= mStart);
+  $("#monthCount").textContent = `${inMonth.length} initiative${inMonth.length === 1 ? "" : "s"} this month`;
+
+  // Legend: verticals present in the data, then status styles, then KPI colours
+  // Every vertical (so a new, still-empty one is listed); Cross-vertical only when moments are loaded.
+  const verticals = ALLOWED.vertical.filter(v => v !== "Cross-vertical" || allRows.some(r => r.vertical === v));
+  const kpiKey = kpiContext() ? `<span class="sep"></span><span class="group"><span class="group-title">KPI</span>
+    <span class="item"><span class="sw s-green-cell"></span>At/above forecast</span>
+    <span class="item"><span class="sw s-amber-cell"></span>Below forecast, above bear</span>
+    <span class="item"><span class="sw s-red-cell"></span>Below bear</span>
+    <span class="item"><span class="sw s-over-cell"></span>Above bull</span>
+    <span class="item"><span class="sw" style="box-shadow:inset 0 0 0 1px var(--border-strong)"></span>No actual yet</span></span>` : "";
+  $("#monthLegend").innerHTML = `
+    <span class="group"><span class="group-title">Vertical</span>${verticals.map(v =>
+      `<span class="item"><span class="sw" style="background:${verticalColor(v)}"></span>${esc(v)}</span>`).join("")}</span>
+    <span class="sep"></span>
+    <span class="group"><span class="group-title">Status</span>${STATUS_LABELS.map(s =>
+      `<span class="item"><span class="sw-bar bar st-${s.toLowerCase()}" style="position:relative;top:0;height:12px;--c:var(--v-smk);padding:0"></span>${s}</span>`).join("")}</span>
+    <span class="sep"></span>
+    <span class="group"><span class="item"><span class="sw" style="background:rgba(71,85,105,.2);border:1px solid rgba(71,85,105,.6)"></span>T1 moment period</span>
+    <span class="item"><span class="sw" style="background:rgba(71,85,105,.08);border:1px dashed rgba(71,85,105,.45)"></span>T2/T3 moment period</span>
+    <span class="item"><span class="sw-bar" style="background:#eef0f3;border:1.5px dashed var(--v-cvt)"></span>Date tentative</span>
+    <span class="item">◀ ▶ Continues past the month</span></span>${kpiKey}`;
+
+  // KPI strip: shown when a KPI source is loaded and at least one KPI is ticked
+  const kctx = kpiContext();
+  const showStrip = !!kctx && shownKpis(kctx).length > 0;
+  renderKpiToggles(kctx);
+
+  // Pixel geometry, used only to decide label placement and row packing
+  const tl = $("#timeline");
+  tl.classList.toggle("has-kpi", showStrip);
+  const labelW = state.printWidth ? 150 : 210;   // matches --label-w on screen and in print
+  const mtdW = showStrip ? (state.printWidth ? 150 : 172) : 0;   // matches --mtd-w
+  const trackPx = (state.printWidth || Math.max(980, tl.parentElement.clientWidth)) - labelW - mtdW;
+  const pxPerDay = trackPx / n;
+
+  // Header: week labels (weeks start Sunday) and day numbers
+  let weeks = "", days = "";
+  for (let ws = weekStart(mStart); ws <= mEnd; ws += 7) {
+    const a = Math.max(ws, mStart), b = Math.min(ws + 6, mEnd);
+    const partial = ws < mStart;
+    weeks += `<div class="wk-label ${partial ? "partial" : ""}" style="left:${pct(a, mStart, n)};width:${((b - a + 1) / n) * 100}%"
+      title="Week of ${fmtDayShort(ws)}">${(b - a + 1) * pxPerDay > 120 ? `Week of ${fmtDayShort(ws)}` : fmtDayShort(ws)}</div>`;
+  }
+  for (let d = mStart; d <= mEnd; d++) {
+    const wd = weekday(d);
+    days += `<div class="day-cell ${wd === 0 ? "sun" : ""} ${d === today ? "today" : ""}" data-day="${d}" style="left:${pct(d, mStart, n)};width:${100 / n}%">
+      ${pxPerDay >= 30 ? `<span>${"SMTWTFS"[wd]}</span>` : ""}<b>${dayToDate(d).getUTCDate()}</b></div>`;
+  }
+
+  // Background grid: Fri/Sat weekend shading, Sunday week lines, today
+  let grid = "";
+  for (let d = mStart; d <= mEnd; d++) {
+    const wd = weekday(d);
+    if (wd === 5) grid += `<div class="weekend" style="left:${pct(d, mStart, n)};width:${(Math.min(2, mEnd - d + 1) / n) * 100}%"></div>`;
+    if (wd === 0 && d > mStart) grid += `<div class="wk-line" style="left:${pct(d, mStart, n)}"></div>`;
+  }
+  if (state.tint && kctx) {
+    const key = tintKpi(kctx);
+    for (let d = mStart; d <= mEnd; d++) {
+      const st = kpiStatusOf(kctx, key, kpiPoint(kctx.kpi, kctx.vertical, key, d)).status;
+      if (["green", "amber", "red", "over"].includes(st)) grid += `<div class="tint t-${st}" style="left:${pct(d, mStart, n)};width:${100 / n}%"></div>`;
+    }
+  }
+  if (today >= mStart && today <= mEnd) grid += `<div class="today-line" style="left:calc(${pct(today, mStart, n)} + ${100 / n / 2}%)" title="Today, ${fmtDay(today)}"></div>`;
+
+  // The first packed row carries the group label (if any); the rest leave the label column blank.
+  const barRows = (items, firstLabel = "", rank) => packBars(items, mStart, mEnd, pxPerDay, trackPx, rank)
+    .map((row, i) => `<div class="tl-row ${i === 0 && firstLabel ? "tl-group-first" : ""}">${i === 0 && firstLabel ? firstLabel : `<div class="tl-label"></div>`}<div class="tl-track">${row.map(b => barHTML(b, mStart, n)).join("")}</div></div>`).join("");
+
+  const laneHead = (lane, count) => `<div class="tl-lane-head"><h3>${lane.title}</h3><span class="muted">${count}</span></div>`;
+
+  // Seasonal moments lane
+  const momentLane = LANES[0];
+  const moments = inMonth.filter(r => r.tier === MOMENT);
+  const tierRank = r => ({ T1: 0, T2: 1, T3: 2 }[momentTier(r)] ?? 3);
+  let body = laneHead(momentLane, moments.length) + (moments.length ? barRows(moments, "", tierRank) : `<div class="tl-empty">${momentLane.empty}</div>`);
+
+  // Campaign lanes, grouped by vertical, with moment bands behind them
+  const bands = moments.map(r => {
+    const s = Math.max(r._start, mStart), e = Math.min(r._end, mEnd);
+    return `<div class="band ${momentTier(r) === "T1" ? "t1" : ""}" data-band="${esc(r._key)}" style="left:${pct(s, mStart, n)};width:${((e - s + 1) / n) * 100}%"></div>`;
+  }).join("");
+  let campaigns = "";
+  const unclassified = inMonth.filter(r => !ALLOWED.tier.includes(r.tier));
+  const campaignLanes = [...LANES.slice(1)];
+  if (unclassified.length) campaignLanes.push({ tier: null, title: "Unclassified (missing or invalid tier)", empty: "" });
+  for (const lane of campaignLanes) {
+    const items = lane.tier ? inMonth.filter(r => r.tier === lane.tier) : unclassified;
+    campaigns += laneHead(lane, items.length);
+    if (!items.length) { campaigns += `<div class="tl-empty">${lane.empty}</div>`; continue; }
+    const groups = new Map();
+    for (const r of items) {
+      const v = r.vertical || "(no vertical)";
+      if (!groups.has(v)) groups.set(v, []);
+      groups.get(v).push(r);
+    }
+    const order = [...groups.keys()].sort((a, b) => {
+      const ia = ALLOWED.vertical.indexOf(a), ib = ALLOWED.vertical.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+    });
+    for (const v of order) {
+      const list = groups.get(v);
+      const key = `${lane.title}|${v}`;
+      const collapsed = state.collapsed.has(key);
+      const minis = collapsed ? list.map(r => {
+        const s = Math.max(r._start, mStart), e = Math.min(r._end, mEnd);
+        return `<div class="mini-bar" style="left:${pct(s, mStart, n)};width:${((e - s + 1) / n) * 100}%;--c:${verticalColor(r.vertical)}"></div>`;
+      }).join("") : "";
+      const label = `<div class="tl-label tl-group-head ${collapsed ? "collapsed" : ""}" data-group="${esc(key)}" role="button" aria-expanded="${!collapsed}" tabindex="0"
+        title="${collapsed ? "Expand" : "Collapse"} ${esc(v)}"><span class="chev">▾</span><span class="vdot" style="background:${verticalColor(v)};margin:0"></span>${esc(v)} <span class="n">${list.length}</span></div>`;
+      if (collapsed) campaigns += `<div class="tl-row tl-group-first">${label}<div class="tl-track">${minis}</div></div>`;
+      else campaigns += barRows(list, label);
+    }
+  }
+  body += `<div class="tl-campaigns"><div class="tl-bands">${bands}</div>${campaigns}</div>`;
+
+  tl.innerHTML = `
+    <div class="tl-head">
+      <div class="tl-row tl-weeks"><div class="tl-label">Week (Sun–Sat)</div><div class="tl-track">${weeks}</div></div>
+      <div class="tl-row tl-days"><div class="tl-label"></div><div class="tl-track">${days}</div>${showStrip ? `<div class="mtd-head">Month to date</div>` : ""}</div>
+    </div>
+    <div class="tl-body"><div class="tl-grid">${grid}</div>${showStrip ? kpiStripHTML(kctx, mStart, mEnd, n, pxPerDay) : kctx ? "" : kpiPrompt()}${body}</div>`;
+
+  $("#monthNote").innerHTML = undated.length
+    ? `${undated.length} initiative${undated.length === 1 ? " isn't" : "s aren't"} on the timeline because of missing or invalid dates:
+       ${undated.map(r => `<button class="link" data-row="${esc(r._key)}">${esc(r.id || barName(r))}</button>`).join(", ")}. See Data issues.`
+    : "";
+}
+
+function renderLoaderBar() {
+  const bits = [];
+  if (state.sources.length || MODE !== "local") bits.push(`<button data-action="reload" title="Read every tab again (or re-read the files) and keep the current view">Reload data</button>`);
+  bits.push(`<button data-action="pick">${MODE === "local" ? "Add or replace files" : "Add CSV files"}</button>`);
+  bits.push(sheetsMenuHTML());
+  if (state.sources.some(s => s.origin === "file")) bits.push(`<button data-action="clear">Clear data</button>`);
+  $("#loaderBar").innerHTML = bits.join("");
+}
+
+function countChip(n, sev) {
+  return `<span class="count ${n ? sev : "zero"}" title="${n} ${sev}${n === 1 ? "" : "s"}">${n}</span>`;
+}
+
+const KIND_LABELS = { moments: "Seasonal moments", vertical: "Campaigns", kpi_engine: "KPI forecast (engine)", kpi_long: "KPI (long format)", kpi_unknown: "KPI (unreadable)" };
+
+function renderSources() {
+  const { sources, rows, kpi } = state.data;
+  const kpiNames = [...kpi.verticals.keys()];
+  $("#sourcesSummary").textContent = `${sources.length} file${sources.length === 1 ? "" : "s"}, ${rows.length} initiatives${kpiNames.length ? `, KPIs for ${kpiNames.join(", ")}` : ""}`;
+  $("#sourcesBody").innerHTML = `
+    <table class="grid">
+      <thead><tr><th>Source</th><th>Type</th><th class="num">Rows</th><th>Errors</th><th>Warnings</th><th>Notes</th></tr></thead>
+      <tbody>${sources.map(s => `
+        <tr>
+          <td><strong>${esc(s.label)}</strong> <span class="faint">${{ url: "· published link", appsScript: "· Google Sheet tab" }[s.origin] || "· local file"}</span></td>
+          <td>${s.loadError ? "" : `<span class="kind-tag">${KIND_LABELS[s.kind] || s.kind}${s.vertical ? ` · ${esc(s.vertical)}` : ""}</span>`}</td>
+          <td class="num">${s.rowCount}${s.kind === "kpi_engine" ? " days" : ""}</td>
+          <td>${countChip(activeIssues(state.data.issues).filter(i => i.sourceIdx === s.sourceIdx && i.severity === "error").length, "error")}</td>
+          <td>${countChip(activeIssues(state.data.issues).filter(i => i.sourceIdx === s.sourceIdx && i.severity === "warning").length, "warning")}</td>
+          <td class="muted">${s.loadError ? `<span class="load-error">${esc(s.loadError)}</span>` : [
+            s.ignored ? `<span class="load-error">Ignored: another file for ${esc(s.vertical)} is loaded</span>` : "",
+            s.firstDay != null ? `${s.kind === "kpi_long" ? "" : "days "}${fmtDay(s.firstDay)} – ${fmtDay(s.lastDay)}` : "",
+            s.kind === "kpi_engine" && !s.ignored && kpiLatestActual(kpi, s.vertical) != null ? `actuals through ${fmtDayShort(kpiLatestActual(kpi, s.vertical))}` : "",
+            s.empty ? "empty (no header or rows yet)" : "",
+            s.blankRows ? `${s.blankRows} blank row${s.blankRows === 1 ? "" : "s"} skipped` : "",
+            s.missingOptional?.length ? `<span title="${esc(s.missingOptional.join(", "))}">${s.missingOptional.length} optional column${s.missingOptional.length === 1 ? "" : "s"} not in file (read as blank)</span>` : "",
+          ].filter(Boolean).join(" · ")}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>`;
+}
+
+function renderIssues() {
+  const { issues } = state.data;
+  const active = activeIssues(issues);
+  const dismissedNow = issues.filter(isDismissed);
+  const live = new Set(issues.map(i => i.fingerprint));
+  const stale = [...state.dismissals.keys()].filter(fp => !live.has(fp)).length;
+  const nErr = active.filter(i => i.severity === "error").length;
+  $("#issuesCounts").innerHTML = `${countChip(nErr, "error")} ${countChip(active.length - nErr, "warning")}${dismissedNow.length ? ` <span class="faint" style="font-size:12px">+${dismissedNow.length} dismissed</span>` : ""}`;
+  document.querySelectorAll("#issueFilters button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.sev === state.issueFilter)));
+  const shown = active.filter(i => state.issueFilter === "all" || i.severity === state.issueFilter);
+  const typeCount = new Map();
+  for (const i of active) typeCount.set(`${i.code}|${i.severity}`, (typeCount.get(`${i.code}|${i.severity}`) || 0) + 1);
+
+  let main;
+  if (!active.length) main = `<div class="empty-note">${issues.length ? "No open issues. Everything else is dismissed." : "No issues found."}</div>`;
+  else if (!shown.length) main = `<div class="empty-note">No ${state.issueFilter}s.</div>`;
+  else main = `<table class="grid">
+      <thead><tr><th></th><th>Where</th><th>id</th><th>Problem</th><th></th></tr></thead>
+      <tbody>${shown.map(i => issueRowHTML(i, typeCount.get(`${i.code}|${i.severity}`))).join("")}</tbody></table>`;
+
+  const dismissedBox = dismissedNow.length || stale ? `
+    <details class="dismissed-box" data-dismissed-box ${state.dismissedOpen ? "open" : ""}>
+      <summary>Dismissed (${dismissedNow.length})${stale ? ` <span class="faint">· ${stale} saved dismissal${stale === 1 ? "" : "s"} no longer match${stale === 1 ? "es" : ""} any issue</span>` : ""}</summary>
+      ${dismissedNow.length ? `<table class="grid"><thead><tr><th></th><th>Where</th><th>id</th><th>Problem</th><th>Note</th><th></th></tr></thead><tbody>
+        ${dismissedNow.map(i => { const d = state.dismissals.get(i.fingerprint); return `<tr class="is-dismissed">
+          <td>${i.severity === "error" ? `<span class="sev error" title="Dismissed error">⚠ Error</span>` : `<span class="sev warning">Warning</span>`}</td>
+          <td style="white-space:nowrap">${esc(i.source)}${i.sheetRow ? ` <span class="muted">· row ${i.sheetRow}</span>` : ""}</td>
+          <td class="mono">${esc(i.id)}</td>
+          <td>${esc(i.message)}</td>
+          <td>${d.note ? esc(d.note) : `<span class="faint">—</span>`}<div class="faint">${d.at ? new Date(d.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""}</div></td>
+          <td class="issue-actions">${editButton(i.sourceIdx, i.sheetRow, "Edit in sheet", true)}<button class="btn btn-sm" data-action="restore" data-fp="${esc(i.fingerprint)}">Restore</button></td></tr>`; }).join("")}
+        </tbody></table>` : ""}
+      ${stale ? `<div class="empty-note">Stale dismissals are kept in case the data changes back. <button class="link" data-action="clean-dismissals">Remove the ${stale} that no longer match</button></div>` : ""}
+    </details>` : "";
+  const storageNote = !STORAGE_OK && state.dismissals.size
+    ? `<div class="empty-note">Browser storage isn't available here, so dismissals last until you close the page. Use <strong>Export dismissals</strong> to keep them.</div>` : "";
+  $("#issuesBody").innerHTML = main + storageNote + dismissedBox;
+  const input = $("#dismissNote");
+  if (input) input.focus();
+}
+
+function renderData() {
+  const { byKey } = state.data;
+  const rows = state.data.rows.filter(passes);
+  $("#dataSummary").textContent = `${rows.length} of ${state.data.rows.length} rows from ${state.data.sources.length} files`;
+  const cell = (r, f, text = r[f]) => r[`_bad_${f}`] ? `<span class="bad-value">${esc(text || "—")}</span>` : esc(text);
+  $("#dataBody").innerHTML = `
+    <table class="grid">
+      <thead><tr><th>id</th><th>Name</th><th>Tier</th><th>Priority</th><th>Parent</th><th>Vertical</th><th>Type</th><th>Start</th><th>End</th><th>Status</th><th>Channels</th><th>Source</th><th>Issues</th></tr></thead>
+      <tbody>${rows.map(r => {
+        const st = rowIssueState(r), err = st === "error", warn = st === "warning";
+        const p = r._parent ? byKey.get(r._parent) : null;
+        return `<tr id="row-${esc(r._key)}" data-row="${esc(r._key)}" class="clickable ${err ? "has-error" : warn ? "has-warning" : ""}">
+          <td class="mono">${esc(r.id) || `<span class="bad-value">—</span>`}</td>
+          <td>${esc(r.name)}</td>
+          <td>${cell(r, "tier")}</td>
+          <td>${cell(r, "priority")}</td>
+          <td>${p ? `<span class="mono">${esc(p.id)}</span> <span class="muted">${esc(p.name)}</span>` : cell(r, "parent_id")}</td>
+          <td style="white-space:nowrap">${r.vertical ? `<span class="vdot" style="background:${verticalColor(r.vertical)}"></span>` : ""}${cell(r, "vertical")}</td>
+          <td>${cell(r, "campaign_type")}</td>
+          <td style="white-space:nowrap">${cell(r, "start_date")}</td>
+          <td style="white-space:nowrap">${cell(r, "end_date")}</td>
+          <td>${cell(r, "status")}</td>
+          <td class="muted">${esc(r._channels.join(", "))}</td>
+          <td class="muted" style="white-space:nowrap">${esc(r._source)} · ${r._sheetRow}</td>
+          <td>${r._issues.length ? r._issues.map(i => `<span class="sev ${i.severity} ${isDismissed(i) ? "dismissed" : ""}" title="${esc(i.message)}${isDismissed(i) ? " (dismissed)" : ""}">${i.severity === "error" ? "E" : "W"}</span>`).join(" ") : ""}</td>
+        </tr>`;
+      }).join("")}
+      </tbody>
+    </table>`;
+}
+
+/* ---------- Filters ---------- */
+
+const NO_OWNER = "(no owner)";
+
+// Campaigns: every filter applies.
+// Seasonal moments ignore the type and owner filters. With a vertical filter,
+// a moment shows when its relevant_verticals include a selected vertical (or
+// All), or when it is the parent or grandparent of a visible campaign. Linked
+// moments also bypass the moment tier filter, since the campaign depends on them.
+function campaignPasses(r) {
+  const f = state.filters;
+  if (f.tier && r.tier !== f.tier) return false;
+  if (f.status && r.status !== f.status) return false;
+  if (f.verticals && !f.verticals.has(r.vertical)) return false;
+  if (f.campaign_type && r.campaign_type !== f.campaign_type) return false;
+  if (f.owner && (r.owner || NO_OWNER) !== f.owner) return false;
+  return true;
+}
+const momentTier = r => (r._bad_priority ? "" : r.priority) || "";
+function momentPasses(r, linked) {
+  const f = state.filters;
+  if (f.tier && f.tier !== MOMENT) return false;
+  if (f.status && r.status !== f.status) return false;
+  if (linked.has(r._key)) return true;
+  if (!f.momentTiers.has(momentTier(r))) return false;
+  if (f.verticals && !f.showAllMoments) return r._relevantAll || [...f.verticals].some(v => r._relevant.has(v));
+  return true;
+}
+function computeVisible() {
+  const { rows, byKey } = state.data;
+  const visible = new Set(), linked = new Set();
+  for (const r of rows) {
+    if (r.tier === MOMENT || !campaignPasses(r)) continue;
+    visible.add(r._key);
+    for (let k = r._parent, hops = 0; k && hops < 5; hops++) {
+      const p = byKey.get(k);
+      if (!p) break;
+      if (p.tier === MOMENT) linked.add(p._key);
+      k = p._parent;
+    }
+  }
+  for (const r of rows) if (r.tier === MOMENT && momentPasses(r, linked)) visible.add(r._key);
+  state.visibleKeys = visible;
+  state.linkedMoments = linked;
+}
+const passes = r => state.visibleKeys.has(r._key);
+
+function filterParts() {
+  const f = state.filters, parts = [];
+  if (f.verticals) parts.push(`Vertical: ${f.verticals.size ? [...f.verticals].join(", ") : "none"}`);
+  if (f.tier) parts.push(`Tier: ${f.tier}`);
+  if (f.campaign_type) parts.push(`Type: ${f.campaign_type}`);
+  if (f.status) parts.push(`Status: ${f.status}`);
+  if (f.owner) parts.push(`Owner: ${f.owner}`);
+  const tiersNow = MOMENT_TIERS.filter(t => f.momentTiers.has(t));
+  if (tiersNow.join() !== "T1,T2,") parts.push(`Moment tiers: ${tiersNow.map(t => t || "no tier").join(", ") || "none"}`);
+  if (f.showAllMoments) parts.push("All moments shown");
+  return parts;
+}
+
+function uniqueSorted(values, order) {
+  const set = [...new Set(values)];
+  return set.sort((a, b) => {
+    const ia = order ? order.indexOf(a) : -1, ib = order ? order.indexOf(b) : -1;
+    return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.localeCompare(b);
+  });
+}
+
+function renderFilters() {
+  const rows = state.data.rows, f = state.filters;
+  const campaigns = rows.filter(r => r.tier !== MOMENT);
+  // Every campaign vertical, plus any other value found in the rows (so it can be filtered and fixed)
+  const vOpts = uniqueSorted([...ALLOWED.vertical.filter(v => v !== "Cross-vertical"), ...campaigns.map(r => r.vertical).filter(Boolean)], ALLOWED.vertical);
+  const typeOpts = uniqueSorted(campaigns.map(r => r.campaign_type).filter(Boolean), ALLOWED.campaign_type);
+  const ownerOpts = uniqueSorted(campaigns.map(r => r.owner || NO_OWNER));
+
+  const sel = (name, label, options) => `
+    <label>${label}
+      <select data-filter="${name}" class="${f[name] ? "active" : ""}">
+        <option value="">All</option>
+        ${uniqueSorted([...options, ...(f[name] ? [f[name]] : [])], options).map(o => `<option ${f[name] === o ? "selected" : ""}>${esc(o)}</option>`).join("")}
+      </select>
+    </label>`;
+
+  const vSummary = !f.verticals ? "All" : !f.verticals.size ? "None" : f.verticals.size <= 2 ? [...f.verticals].join(", ") : `${f.verticals.size} selected`;
+  const tiersNow = MOMENT_TIERS.filter(t => f.momentTiers.has(t));
+  const mSummary = tiersNow.length === MOMENT_TIERS.length ? "All tiers" : tiersNow.length ? tiersNow.map(t => t || "No tier").join(", ") : "None";
+  const shown = rows.filter(passes).length;
+  const momentCounts = Object.fromEntries(MOMENT_TIERS.map(t => [t, rows.filter(r => r.tier === MOMENT && momentTier(r) === t).length]));
+  $("#filterBar").innerHTML = `
+    <label>Vertical
+      <details class="ms ${f.verticals ? "active" : ""}" data-menu="vertical" ${state.openMenu === "vertical" ? "open" : ""}>
+        <summary>${esc(vSummary)}</summary>
+        <div class="ms-menu">
+          <div class="ms-actions"><button class="link" data-action="all-verticals">All verticals</button></div>
+          ${vOpts.map(v => `<label><input type="checkbox" data-vertical="${esc(v)}" ${!f.verticals || f.verticals.has(v) ? "checked" : ""}>
+            <span class="vdot" style="background:${verticalColor(v)}"></span>${esc(v)}</label>`).join("") || `<div class="faint" style="padding:6px 8px">No campaigns loaded</div>`}
+        </div>
+      </details>
+    </label>
+    ${sel("tier", "Tier", ALLOWED.tier)}
+    ${sel("campaign_type", "Type", typeOpts)}
+    ${sel("status", "Status", ALLOWED.status)}
+    ${sel("owner", "Owner", ownerOpts)}
+    <label>Moments
+      <details class="ms ${tiersNow.join() !== "T1,T2," ? "active" : ""}" data-menu="moments" ${state.openMenu === "moments" ? "open" : ""}>
+        <summary>${esc(mSummary)}</summary>
+        <div class="ms-menu">
+          ${MOMENT_TIERS.map(t => `<label><input type="checkbox" data-moment-tier="${t}" ${f.momentTiers.has(t) ? "checked" : ""}>
+            ${t ? `<span class="chip prio">${t}</span>` : "No tier"} <span class="faint">${momentCounts[t]}</span></label>`).join("")}
+        </div>
+      </details>
+    </label>
+    <label title="Show seasonal moments for every vertical, not only those relevant to the selected verticals">
+      <input type="checkbox" data-show-all-moments ${f.showAllMoments ? "checked" : ""}> Show all moments</label>
+    <span class="filter-note">Showing ${shown} of ${rows.length}${filterParts().length ? ` · <button class="link" data-action="clear-filters">Clear filters</button>` : ""}</span>`;
+}
+
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (t.dataset.filter) {
+    state.filters[t.dataset.filter] = t.value;
+    render();
+  } else if (t.dataset.tint !== undefined) {
+    state.tint = t.checked;
+    render();
+  } else if (t.dataset.kpiShow !== undefined) {
+    t.checked ? state.kpiShow.add(t.dataset.kpiShow) : state.kpiShow.delete(t.dataset.kpiShow);
+    render();
+  } else if (t.dataset.momentTier !== undefined) {
+    t.checked ? state.filters.momentTiers.add(t.dataset.momentTier) : state.filters.momentTiers.delete(t.dataset.momentTier);
+    render();
+  } else if (t.dataset.showAllMoments !== undefined) {
+    state.filters.showAllMoments = t.checked;
+    render();
+  } else if (t.dataset.vertical !== undefined) {
+    const all = [...document.querySelectorAll("[data-vertical]")];
+    const checked = all.filter(c => c.checked).map(c => c.dataset.vertical);
+    state.filters.verticals = checked.length === all.length ? null : new Set(checked);
+    render();
+  }
+});
+document.addEventListener("toggle", e => {
+  if (e.target.classList?.contains("ms")) {
+    if (e.target.open) state.openMenu = e.target.dataset.menu;
+    else if (state.openMenu === e.target.dataset.menu) state.openMenu = null;
+  }
+}, true);
+
+/* ---------- KPI views ---------- */
+
+// Which KPI series to show: the selected vertical when exactly one is selected
+// and it has a KPI source; otherwise the company total.
+function kpiContext() {
+  const kpi = state.data?.kpi;
+  if (!kpi || !kpi.verticals.size) return null;
+  const sel = state.filters.verticals;
+  if (sel && sel.size === 1 && kpi.verticals.has([...sel][0])) {
+    const v = [...sel][0];
+    return { kpi, vertical: v, label: v, total: false };
+  }
+  if (kpi.verticals.has(KPI_TOTAL)) return { kpi, vertical: KPI_TOTAL, label: "Company total", total: true };
+  const first = [...kpi.verticals.keys()][0];
+  return { kpi, vertical: first, label: first, total: false };
+}
+const kpiMode = ctx => kpiStatusMode(ctx.kpi, ctx.vertical, CONFIG.kpiStatus);
+const kpiStatusOf = (ctx, key, point) => kpiStatus(point, ctx.kpi.defs[key], kpiMode(ctx), CONFIG.kpiStatus.thresholdPct);
+const shownKpis = ctx => Object.keys(ctx.kpi.defs).filter(k => state.kpiShow.has(k));
+
+function statusText(st) {
+  const t = CONFIG.kpiStatus.thresholdPct;
+  const text = st.basis === "threshold"
+    ? { over: `More than ${t}% above forecast`, green: "At or above forecast", amber: `Below forecast, within ${t}%`, red: `More than ${t}% below forecast` }
+    : { over: "Above bull", green: "At or above forecast", amber: "Below forecast, at or above bear", red: "Below bear" };
+  if (st.status === "no_actual") return "No actual yet";
+  if (st.status === "none") return "No forecast";
+  return text[st.status] + (st.status === "over" && st.basis !== "threshold" ? " (at or above forecast)" : "");
+}
+const signed = (v, fmt) => (v == null ? "—" : `${Math.round(v) > 0 ? "+" : ""}${fmt(v)}`);
+
+function renderActualsThrough() {
+  const ctx = kpiContext();
+  const el = $("#actualsThrough");
+  if (!ctx) { el.classList.add("hidden"); return; }
+  const d = kpiLatestActual(ctx.kpi, ctx.vertical);
+  el.textContent = (d != null ? `Actuals through ${fmtDayShort(d)}` : "No actuals yet") + (ctx.total ? "" : ` · ${ctx.label}`);
+  el.title = `KPI actuals for ${ctx.label}`;
+  el.classList.remove("hidden");
+}
+
+function kpiPrompt() {
+  return `<div class="kpi-prompt">No KPI forecast loaded. Drop the forecasting engine export (or a long-format KPI file) to see daily orders, GMV and AOV against forecast.
+    <button data-action="pick">Choose KPI file</button></div>`;
+}
+
+function renderKpiToggles(ctx) {
+  $("#kpiToggles").innerHTML = ctx ? `KPIs ${Object.entries(ctx.kpi.defs).map(([k, d]) =>
+    `<label><input type="checkbox" data-kpi-show="${esc(k)}" ${state.kpiShow.has(k) ? "checked" : ""}>${esc(d.label)}</label>`).join("")}
+    <label title="Shade each day by its orders status, so problem days stand out"><input type="checkbox" data-tint ${state.tint ? "checked" : ""}>Tint days</label>` : "";
+}
+// The KPI used to tint the calendar: orders, else the first summed KPI.
+const tintKpi = ctx => (ctx.kpi.defs.orders ? "orders" : Object.keys(ctx.kpi.defs).find(k => !ctx.kpi.defs[k].derived));
+
+// KPI rows under the date axis, on the same day columns as the bars.
+function kpiStripHTML(ctx, mStart, mEnd, n, pxPerDay) {
+  const today = todayDay();
+  const keys = shownKpis(ctx);
+  let html = `<div class="tl-kpi-head"><h3>Daily KPIs</h3><span class="kpi-scope">${esc(ctx.label)}</span>
+    <span class="muted" style="font-size:11px">Actual, or forecast in grey italics where there's no actual yet</span></div>`;
+  for (const key of keys) {
+    const def = ctx.kpi.defs[key];
+    let cells = "";
+    for (let d = mStart; d <= mEnd; d++) {
+      const p = kpiPoint(ctx.kpi, ctx.vertical, key, d);
+      if (!p || (p.forecast == null && p.actual == null)) continue;
+      const st = kpiStatusOf(ctx, key, p);
+      const value = p.actual ?? p.forecast;
+      cells += `<button class="kc s-${st.status} ${d === today ? "today" : ""} ${pxPerDay < 30 ? "sm" : ""}" data-day="${d}" data-tip="day" data-kpi="${esc(key)}"
+        style="left:${pct(d, mStart, n)};width:calc(${100 / n}% - 2px)" aria-label="${esc(def.label)} ${fmtDay(d)}">${pxPerDay >= 21 ? fmtCompact(value) : ""}</button>`;
+    }
+    const m = kpiPeriod(ctx.kpi, ctx.vertical, key, mStart, mEnd);
+    html += `<div class="tl-row kpi-row"><div class="tl-label">${esc(def.label)}${def.unit === "QAR" ? ` <span class="unit">QAR</span>` : ""}</div>
+      <div class="tl-track">${cells}</div>${mtdHTML(ctx, key, m, mStart, mEnd)}</div>`;
+  }
+  return html;
+}
+
+function mtdHTML(ctx, key, m, from, to) {
+  if (!m) return `<div class="mtd"><span class="sub faint">No forecast this month</span></div>`;
+  const attrs = `data-tip="period" data-kpi="${esc(key)}" data-from="${from}" data-to="${to}"`;
+  if (m.actual == null) {
+    return `<div class="mtd" ${attrs}><div class="top"><span class="st-dot s-none"></span>No actuals yet</div>
+      <div class="sub">Month forecast ${fmtCompact(m.forecastAll)}</div></div>`;
+  }
+  const st = kpiStatusOf(ctx, key, { forecast: m.forecast, bear: m.bear, bull: m.bull, actual: m.actual });
+  const complete = m.daysWithActual === m.days;
+  return `<div class="mtd" ${attrs}>
+    <div class="top"><span class="st-dot s-${st.status}"></span>${complete ? "Month" : "MTD"} ${fmtPct(m.attainment)} <span class="sub" style="font-weight:500">of forecast</span></div>
+    <div class="sub">${complete ? `${fmtCompact(m.actual, 2)} vs ${fmtCompact(m.forecast, 2)}` : `Proj. ${fmtCompact(m.projected, 2)} vs ${fmtCompact(m.forecastAll, 2)}`}</div></div>`;
+}
+
+// Hover card content for a KPI day cell or an MTD/period summary.
+function tipHTML(el) {
+  const ctx = kpiContext();
+  if (!ctx) return "";
+  const key = el.dataset.kpi, def = ctx.kpi.defs[key];
+  if (!def) return "";
+  const v = x => fmtKpi(x, def);
+  const line = (k, val, cls = "") => `<tr><td>${k}</td><td class="v ${cls}">${val}</td></tr>`;
+  if (el.dataset.tip === "day") {
+    const d = +el.dataset.day;
+    const p = kpiPoint(ctx.kpi, ctx.vertical, key, d);
+    if (!p) return "";
+    const st = kpiStatusOf(ctx, key, p);
+    return `<h5>${esc(def.label)} · ${fmtDayShort(d)} ${dayParts(d)[0]}</h5><table>
+      ${line("Forecast", v(p.forecast))}
+      ${p.bear != null ? line("Bear", v(p.bear)) : ""}${p.bull != null ? line("Bull", v(p.bull)) : ""}
+      ${line("Actual", p.actual != null ? v(p.actual) : "no actual yet")}
+      ${p.actual != null ? line("Delta", `${signed(st.delta, x => fmtKpi(x, def))} (${fmtPct(st.deltaPct, true)})`) : ""}
+      ${st.vsBear != null ? line("vs bear", fmtPct(st.vsBear)) : ""}${st.vsBull != null ? line("vs bull", fmtPct(st.vsBull)) : ""}
+      </table><div class="st">${statusText(st)}${st.basis === "threshold" && p.actual != null ? ` · ±${CONFIG.kpiStatus.thresholdPct}% rule` : ""}</div>
+      <div style="opacity:.7;margin-top:2px">${esc(ctx.label)} · click for the day's detail</div>`;
+  }
+  const from = +el.dataset.from, to = +el.dataset.to;
+  const m = kpiPeriod(ctx.kpi, ctx.vertical, key, from, to);
+  if (!m) return "";
+  const st = m.actual != null ? kpiStatusOf(ctx, key, { forecast: m.forecast, bear: m.bear, bull: m.bull, actual: m.actual }) : { status: "no_actual" };
+  return `<h5>${esc(def.label)} · ${fmtDay(from)} – ${fmtDay(to)}</h5><table>
+    ${line("Days with actuals", `${m.daysWithActual} of ${m.days}`)}
+    ${line("Actual", v(m.actual))}
+    ${line("Forecast, same days", v(m.forecast))}
+    ${m.bear != null ? line("Bear, same days", v(m.bear)) : ""}
+    ${line("Attainment", fmtPct(m.attainment))}
+    ${m.vsBear != null ? line("vs bear", fmtPct(m.vsBear)) : ""}
+    ${line("Projected period end", v(m.projected))}
+    ${line("Period forecast", v(m.forecastAll))}
+    </table><div class="st">${statusText(st)}</div>
+    <div style="opacity:.7;margin-top:2px">Projection = actual + remaining forecast × attainment</div>`;
+}
+
+// Weekly KPI table: KPI × day, forecast / actual / delta / delta %, plus a week total.
+function renderWeekKpi(ws) {
+  const el = $("#weekKpi");
+  const ctx = kpiContext();
+  if (!ctx) { el.innerHTML = kpiPrompt(); return; }
+  const today = todayDay();
+  const days = Array.from({ length: 7 }, (_, i) => ws + i);
+  const num = x => (x == null ? "—" : fmtNum(Math.round(x) || 0));   // || 0 turns -0 into 0
+  const tone = x => (x == null ? "" : x < 0 ? "neg" : x > 0 ? "pos" : "");
+  let body = "";
+  for (const [key, def] of Object.entries(ctx.kpi.defs)) {
+    const pts = days.map(d => kpiPoint(ctx.kpi, ctx.vertical, key, d));
+    const sts = pts.map(p => kpiStatusOf(ctx, key, p));
+    const w = kpiPeriod(ctx.kpi, ctx.vertical, key, ws, ws + 6);
+    const wst = w && w.actual != null ? kpiStatusOf(ctx, key, { forecast: w.forecast, bear: w.bear, bull: w.bull, actual: w.actual }) : { status: "none" };
+    const wDelta = w && w.actual != null ? w.actual - w.forecast : null;
+    body += `<tr class="kname"><th colspan="9">${esc(def.label)}${def.unit === "QAR" ? ` <span class="muted" style="font-weight:500">QAR</span>` : ""}</th></tr>
+      <tr><th class="rowh">Forecast</th>${pts.map(p => `<td>${num(p?.forecast)}</td>`).join("")}<td class="wk-total">${num(w?.forecastAll)}</td></tr>
+      <tr><th class="rowh">Actual</th>${pts.map((p, i) => p?.actual != null
+        ? `<td class="s-${sts[i].status}-cell" data-tip="day" data-kpi="${esc(key)}" data-day="${days[i]}">${num(p.actual)}</td>`
+        : `<td class="na">${p?.forecast != null ? "no actual" : "—"}</td>`).join("")}
+        <td class="wk-total ${w?.actual != null ? `s-${wst.status}-cell` : "na"}" data-tip="period" data-kpi="${esc(key)}" data-from="${ws}" data-to="${ws + 6}">${w?.actual != null ? `${num(w.actual)} <span class="muted" style="font-weight:500">(${w.daysWithActual}/7 d)</span>` : "no actuals"}</td></tr>
+      <tr><th class="rowh">Delta</th>${sts.map(s => `<td class="${tone(s.delta)}">${signed(s.delta, num)}</td>`).join("")}<td class="wk-total ${tone(wDelta)}">${signed(wDelta, num)}</td></tr>
+      <tr><th class="rowh">Delta %</th>${sts.map(s => `<td class="${tone(s.deltaPct)}">${fmtPct(s.deltaPct, true)}</td>`).join("")}<td class="wk-total ${tone(wDelta)}">${fmtPct(w && w.actual != null ? w.attainment - 1 : null, true)}</td></tr>`;
+  }
+  el.innerHTML = `<table>
+    <thead><tr><th style="text-align:left"><span class="kpi-scope">${esc(ctx.label)}</span></th>
+      ${days.map(d => `<th class="dayh ${d === today ? "today" : ""}" data-day="${d}" title="Open ${fmtDay(d)}">${fmtDayShort(d)}</th>`).join("")}
+      <th>Week</th></tr></thead>
+    <tbody>${body}</tbody></table>
+    <div class="foot">The week's delta compares actuals with the forecast for the same days; the Forecast row shows the full week. Days without an actual are never counted as zero.</div>`;
+}
+
+// Hover card
+(() => {
+  const tip = document.getElementById("tip");
+  let current = null;
+  document.addEventListener("mouseover", e => {
+    const t = e.target.closest?.("[data-tip]");
+    if (t === current) return;
+    current = t;
+    if (!t) { tip.style.display = "none"; return; }
+    const html = tipHTML(t);
+    if (!html) { tip.style.display = "none"; return; }
+    tip.innerHTML = html;
+    tip.style.display = "block";
+  });
+  document.addEventListener("mousemove", e => {
+    if (tip.style.display !== "block") return;
+    const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = e.clientX + pad, y = e.clientY + pad;
+    if (x + w > window.innerWidth - 8) x = e.clientX - w - pad;
+    if (y + h > window.innerHeight - 8) y = e.clientY - h - pad;
+    tip.style.left = `${Math.max(8, x)}px`; tip.style.top = `${Math.max(8, y)}px`;
+  });
+  document.addEventListener("scroll", () => { tip.style.display = "none"; current = null; }, true);
+})();
+
+/* ---------- Edit in sheet ---------- */
+
+// <editUrl>#gid=<gid>&range=A<row>. A pasted link may carry ?usp=… or #gid=…;
+// everything after /edit is dropped.
+function sheetLink(cfg, row) {
+  if (!cfg?.editUrl) return null;
+  const url = cfg.editUrl.trim();
+  const m = /^(.*?\/edit)/.exec(url);
+  const base = m ? m[1] : url.replace(/[?#].*$/, "");
+  return `${base}#gid=${cfg.gid ?? 0}${row ? `&range=A${row}` : ""}`;
+}
+const NO_LINK_TIP = "Add this sheet's link in the config to enable editing.";
+function editButton(sourceIdx, row, label = "Edit in sheet", small = false) {
+  const src = state.sources[sourceIdx];
+  const href = src ? sheetLink(configFor(src), row) : null;
+  const cls = `btn${small ? " btn-sm" : ""}`;
+  return href
+    ? `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener" title="Open ${esc(src.label)}${row ? `, row ${row}` : ""} in Google Sheets">${label} ↗</a>`
+    : `<span class="${cls} disabled" aria-disabled="true" title="${NO_LINK_TIP}">${label}</span>`;
+}
+
+function sheetsMenuHTML() {
+  const items = configuredSources().filter(c => c.editUrl);
+  return `<details class="ms sheets-menu" data-menu="sheets" ${state.openMenu === "sheets" ? "open" : ""}>
+    <summary>Open sheets</summary>
+    <div class="ms-menu" style="right:0;left:auto;min-width:260px">
+      ${items.length ? items.map(c => `<a class="menu-link" href="${esc(sheetLink(c))}" target="_blank" rel="noopener">${esc(c.label)} <span class="faint">${esc({ moments: "moments", campaigns: "campaigns", kpi_engine: "KPI", kpi: "KPI" }[c.type] || "")}</span></a>`).join("")
+        : `<div class="faint" style="padding:6px 8px;max-width:260px">No sheet links yet. Add <span class="mono">editUrl</span> and <span class="mono">gid</span> to each source in the CONFIG block at the top of index.html.</div>`}
+    </div></details>`;
+}
+
+/* ---------- Reload data ---------- */
+
+// Remembered file handles (Chrome and Edge), so "Reload data" can re-read the
+// same files without picking them again. Kept in IndexedDB; every call is
+// best-effort and the page works without it.
+const handleStore = {
+  open() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open("marketingTracker", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("handles");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async put(label, handle) {
+    try { const db = await this.open(); db.transaction("handles", "readwrite").objectStore("handles").put(handle, label); } catch { /* not available */ }
+  },
+  async all() {
+    try {
+      const db = await this.open();
+      return await new Promise(resolve => {
+        const out = new Map();
+        const cur = db.transaction("handles").objectStore("handles").openCursor();
+        cur.onsuccess = () => { const c = cur.result; if (c) { out.set(c.key, c.value); c.continue(); } else resolve(out); };
+        cur.onerror = () => resolve(out);
+      });
+    } catch { return new Map(); }
+  },
+  async clear() {
+    try { const db = await this.open(); db.transaction("handles", "readwrite").objectStore("handles").clear(); } catch { /* not available */ }
+  },
+};
+
+async function pickFiles() {
+  if (!window.showOpenFilePicker || window.top !== window) { $("#filePicker").click(); return; }
+  try {
+    const handles = await window.showOpenFilePicker({ multiple: true, types: [{ description: "CSV or dismissals JSON", accept: { "text/csv": [".csv"], "application/json": [".json"] } }] });
+    const files = await Promise.all(handles.map(h => h.getFile()));
+    addFiles(files, new Map(handles.map(h => [h.name, h])));
+  } catch (e) {
+    if (e.name !== "AbortError") $("#filePicker").click();
+  }
+}
+
+async function fetchUrlSource(c) {
+  const base = { label: c.label || c.url, origin: "url", url: c.url };
+  try {
+    const res = await fetch(c.url, { cache: "no-store" });
+    const text = await res.text();
+    const problem = publishedCsvProblem(res.status, text);
+    if (problem) throw new Error(problem);
+    return { ...base, text };
+  } catch (e) {
+    // Browsers report network, CORS and blocked-host failures all as a TypeError,
+    // including a sign-in-restricted link (Google's sign-in page has no CORS headers).
+    const msg = e instanceof TypeError
+      ? "couldn't read Google Sheets. Either there's no connection or the network blocks docs.google.com, or the spreadsheet isn't published to the web, or publishing is restricted to signed-in people in your organisation (open the tab's published link in a private window to check)"
+      : e.message || String(e);
+    return { ...base, text: "", loadError: msg };
+  }
+}
+
+// google.script.run as a promise.
+function callServer(fn, ...args) {
+  return new Promise((resolve, reject) =>
+    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fn](...args));
+}
+// Every configured tab, read server-side in one round trip. A missing tab
+// becomes a "Tab not found" source instead of failing the whole load.
+async function fetchAppsScriptSources() {
+  const labels = CONFIG.sources.map(c => c.label);
+  try {
+    const { info, tabs } = await callServer("loadTracker", labels);
+    state.sheetInfo = info;
+    return labels.map(label => {
+      const t = tabs.find(x => x.name === label);
+      if (!t || !t.found) {
+        return { label, origin: "appsScript", records: [],
+          loadError: `Tab not found: there's no tab called "${label}" in "${info.name}". Rename the tab, or update its label in CONFIG. Tabs in the spreadsheet: ${info.tabs.map(x => x.name).join(", ")}` };
+      }
+      return { label, origin: "appsScript", records: t.values };
+    });
+  } catch (e) {
+    const msg = String(e && e.message || e);
+    const loadError = /permission|access|authori[sz]/i.test(msg)
+      ? `You don't have access to the Marketing Tracker spreadsheet (${msg}). Ask its owner to share it with you, then reload`
+      : `Couldn't read the spreadsheet: ${msg}`;
+    return labels.map(label => ({ label, origin: "appsScript", records: [], loadError }));
+  }
+}
+async function loadFromAppsScript() {
+  state.loading = true;
+  render();
+  const tabs = await fetchAppsScriptSources();
+  state.loading = false;
+  state.sources = [...tabs, ...state.sources.filter(s => s.origin === "file")];
+  rebuild();
+}
+
+// Re-fetch every URL source and re-read every remembered file. View, period,
+// filters and the open panel stay as they are.
+async function reloadData() {
+  notice("Reloading…", true);
+  const urlSources = MODE === "urls" ? await Promise.all(configuredSources().filter(c => c.url).map(fetchUrlSource))
+    : MODE === "appsScript" ? await fetchAppsScriptSources() : [];
+  const missing = [];
+  let reread = 0;
+  const files = await Promise.all(state.sources.filter(s => s.origin === "file").map(async s => {
+    const h = state.handles.get(s.label);
+    if (!h) { missing.push(s.label); return s; }
+    try {
+      if (h.queryPermission && (await h.queryPermission({ mode: "read" })) !== "granted" && (await h.requestPermission({ mode: "read" })) !== "granted") throw new Error("permission");
+      const f = await h.getFile();
+      reread++;
+      return { label: s.label, text: await f.text(), origin: "file" };
+    } catch {
+      missing.push(s.label);
+      return s;
+    }
+  }));
+  state.sources = [...urlSources, ...files];
+  if (MODE === "local") storageSet(state.sources.filter(s => s.origin === "file" && !s.loadError).map(({ label, text }) => ({ label, text })));
+  rebuild();
+  const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const done = [urlSources.length ? `${urlSources.length} tab${urlSources.length === 1 ? "" : "s"}` : "", reread ? `${reread} file${reread === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ");
+  notice(`${done ? `Reloaded ${done} at ${time}.` : ""}${missing.length
+    ? ` ${missing.length === 1 ? "This file" : "These files"} can't be re-read automatically in this browser: ${missing.map(esc).join(", ")}. <button data-action="pick">Choose ${missing.length === 1 ? "it" : "them"} again</button>`
+    : ""}`, missing.length > 0);
+}
+
+let noticeTimer;
+function notice(html, sticky = false) {
+  const el = $("#notice");
+  el.innerHTML = `${html} <button class="link" data-action="close-notice" aria-label="Dismiss">×</button>`;
+  el.classList.remove("hidden");
+  clearTimeout(noticeTimer);
+  if (!sticky) noticeTimer = setTimeout(() => el.classList.add("hidden"), 6000);
+}
+
+/* ---------- Day panel ---------- */
+
+function openDay(day) { state.panelKey = null; state.panelBackDay = null; state.panelDay = day; renderPanel(); }
+
+function kpiStatusChip(st) {
+  if (st.status === "none") return "";
+  if (st.status === "no_actual") return `<span class="chip kst">No actual yet</span>`;
+  return `<span class="chip kst s-${st.status}-cell">${esc(statusText(st).replace(" (at or above forecast)", ""))}</span>`;
+}
+
+function dayKpiTable(kpi, vertical, label, day) {
+  const ctx = { kpi, vertical, label };
+  const defs = kpi.defs;
+  let rowsHtml = "", firstRows = null;
+  for (const [key, def] of Object.entries(defs)) {
+    const p = kpiPoint(kpi, vertical, key, day);
+    if (!p || p.forecast == null) continue;
+    if (!def.derived && !firstRows) firstRows = p.rows;
+    const st = kpiStatusOf(ctx, key, p);
+    const v = x => fmtKpi(x, def);
+    rowsHtml += `<tr>
+      <th>${esc(def.label)}</th>
+      <td>${v(p.forecast)}${p.bear != null ? `<div class="faint">bear ${fmtNum(Math.round(p.bear))} · bull ${fmtNum(Math.round(p.bull))}</div>` : ""}</td>
+      <td class="${p.actual != null ? `s-${st.status}-cell` : "na"}">${p.actual != null ? v(p.actual) : "no actual yet"}${p.actualOverridden ? `<div class="faint">overrides engine ${fmtNum(Math.round(p.actualOverridden.was))}</div>` : ""}</td>
+      <td>${p.actual != null ? `${signed(st.delta, x => fmtNum(Math.round(x) || 0))}<div class="faint">${fmtPct(st.deltaPct, true)}</div>` : "—"}</td>
+      <td>${kpiStatusChip(st)}</td></tr>`;
+  }
+  if (!rowsHtml) return "";
+  const links = firstRows?.forecast ? editButton(firstRows.forecast.sourceIdx, firstRows.forecast.sheetRow, "Edit in sheet", true) : "";
+  const actualLink = firstRows?.actual && firstRows.actual.sourceIdx !== firstRows.forecast?.sourceIdx ? editButton(firstRows.actual.sourceIdx, firstRows.actual.sheetRow, "Edit actual", true) : "";
+  return `<div class="day-kpi">
+    <div class="day-kpi-head"><strong>${esc(label)}</strong><span class="spacer"></span>${links}${actualLink}</div>
+    <table><thead><tr><th></th><th>Forecast</th><th>Actual</th><th>Delta</th><th>Status</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
+}
+
+function renderDayPanel(root) {
+  const day = state.panelDay;
+  const [y] = dayParts(day);
+  const kpi = state.data.kpi;
+  const ctx = kpiContext();
+  const live = state.data.rows.filter(r => passes(r) && r._start !== null && r._end !== null && r._start <= day && r._end >= day);
+  const tierRank = r => ({ T1: 0, T2: 1, T3: 2 }[momentTier(r)] ?? 3);
+  const moments = live.filter(r => r.tier === MOMENT).sort((a, b) => tierRank(a) - tierRank(b) || barName(a).localeCompare(barName(b)));
+  const campaigns = live.filter(r => r.tier !== MOMENT);
+  const byVertical = new Map();
+  for (const r of campaigns) {
+    const v = r.vertical || "(no vertical)";
+    if (!byVertical.has(v)) byVertical.set(v, []);
+    byVertical.get(v).push(r);
+  }
+  const verticals = uniqueSorted([...byVertical.keys()], ALLOWED.vertical);
+  const tierOrder = r => TIER_ORDER.indexOf(r.tier) < 0 ? 9 : TIER_ORDER.indexOf(r.tier);
+
+  // KPI tables: the series in view first, then any other loaded verticals
+  const kpiVerticals = ctx ? [ctx.vertical, ...[...kpi.verticals.keys()].filter(v => v !== ctx.vertical)] : [];
+  const kpiHtml = kpiVerticals.map(v => dayKpiTable(kpi, v, v === KPI_TOTAL ? "Company total" : v, day)).join("");
+  const headline = (() => {
+    if (!ctx || !kpi.defs.orders) return "";
+    const p = kpiPoint(kpi, ctx.vertical, "orders", day);
+    const st = kpiStatusOf(ctx, "orders", p);
+    if (st.status === "none") return "";
+    return `<div class="day-headline s-${st.status}-cell">${st.status === "no_actual" ? `Orders forecast ${fmtNum(Math.round(p.forecast))} · no actual yet`
+      : `Orders ${fmtPct(st.deltaPct, true)} vs forecast · ${esc(statusText(st).replace(" (at or above forecast)", ""))}`}</div>`;
+  })();
+
+  root.innerHTML = `
+    <div class="panel-backdrop" data-action="close-panel"></div>
+    <aside class="panel" role="dialog" aria-modal="true" aria-labelledby="panelTitle">
+      <div class="panel-head" style="--c:var(--text)">
+        <div class="top">
+          <span class="chip tier">Day</span>${day === todayDay() ? `<span class="chip" style="background:var(--error);color:#fff">Today</span>` : ""}
+          <span class="spacer" style="flex:1"></span>
+          <button class="btn btn-sm" data-day="${day - 1}" aria-label="Previous day">‹</button>
+          <button class="btn btn-sm" data-day="${day + 1}" aria-label="Next day">›</button>
+          <button class="close" data-action="close-panel" aria-label="Close">×</button>
+        </div>
+        <h2 id="panelTitle">${DAYS_SHORT[weekday(day)]} ${fmtDay(day)}</h2>
+        <div class="muted">Week of ${fmtDayShort(weekStart(day))} ${y}</div>
+      </div>
+      <div class="panel-body">
+        ${headline}
+        <h4>KPIs</h4>
+        ${kpiHtml || `<p class="text empty">${ctx ? "No forecast for this day." : "No KPI file loaded."}</p>`}
+
+        <h4>Seasonal moments (${moments.length})</h4>
+        ${moments.length ? moments.map(relCard).join("") : `<p class="text empty">No seasonal moments on this day</p>`}
+
+        <h4>Campaigns live (${campaigns.length})</h4>
+        ${verticals.length ? verticals.map(v => `<div class="day-vertical"><span class="vdot" style="background:${verticalColor(v)}"></span>${esc(v)} <span class="faint">${byVertical.get(v).length}</span></div>
+          ${byVertical.get(v).sort((a, b) => tierOrder(a) - tierOrder(b) || a._start - b._start).map(relCard).join("")}`).join("")
+          : `<p class="text empty">No campaigns live on this day</p>`}
+        ${filterParts().length ? `<p class="faint" style="font-size:12px;margin-top:12px">Showing moments and campaigns that match the current filters.</p>` : ""}
+      </div>
+    </aside>`;
+  root.querySelector(".close").focus({ preventScroll: true });
+}
+
+/* ---------- Dismissed issues ---------- */
+
+// Dismissals are keyed by issue fingerprint (type + row id or date + the values
+// that caused it), so an issue whose data changes comes back on its own.
+// Called while `state` is being created, so it can't rely on consts declared below it.
+function loadDismissals() {
+  const DISMISS_KEY = "marketingTracker.dismissals.v1";
+  try {
+    const raw = JSON.parse(localStorage.getItem(DISMISS_KEY) || "{}");
+    return new Map(Object.entries(raw));
+  } catch { return new Map(); }
+}
+function saveDismissals() {
+  try { localStorage.setItem("marketingTracker.dismissals.v1", JSON.stringify(Object.fromEntries(state.dismissals))); } catch { /* storage blocked: dismissals last until the page closes */ }
+}
+const isDismissed = i => state.dismissals.has(i.fingerprint);
+const activeIssues = issues => issues.filter(i => !isDismissed(i));
+
+function dismissIssues(fingerprints, note) {
+  const at = new Date().toISOString();
+  for (const fp of fingerprints) {
+    const i = state.data.issues.find(x => x.fingerprint === fp);
+    state.dismissals.set(fp, { note: note || "", at, code: i?.code, severity: i?.severity, message: i?.message, source: i?.source, id: i?.id });
+  }
+  saveDismissals();
+  state.dismissForm = null;
+  render();
+}
+function restoreIssue(fp) { state.dismissals.delete(fp); saveDismissals(); render(); }
+function cleanStaleDismissals() {
+  const live = new Set(state.data.issues.map(i => i.fingerprint));
+  for (const fp of [...state.dismissals.keys()]) if (!live.has(fp)) state.dismissals.delete(fp);
+  saveDismissals(); render();
+}
+
+function dismissalsJSON() {
+  return JSON.stringify({
+    type: "marketing-tracker-dismissals", version: 1, exportedAt: new Date().toISOString(),
+    dismissals: [...state.dismissals].map(([fingerprint, d]) => ({ fingerprint, ...d })),
+  }, null, 2);
+}
+// Export and import go through a dialog with the JSON as text, so they still
+// work where downloads or storage are blocked (e.g. inside Apps Script).
+function exportDismissals() {
+  dialog(`<h3>Export dismissals</h3>
+    <p>${state.dismissals.size} dismissal${state.dismissals.size === 1 ? "" : "s"}. Save them as a <span class="mono">.json</span> file, or copy the text and send it to the team.</p>
+    <textarea id="dismissText" readonly rows="12">${esc(dismissalsJSON())}</textarea>
+    <div class="dialog-actions"><button class="primary" data-action="dismiss-download">Download .json</button>
+      <button data-action="dismiss-copy">Copy text</button><span class="spacer"></span><button data-action="close-dialog">Close</button></div>`);
+}
+function downloadDismissals() {
+  try {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([dismissalsJSON()], { type: "application/json" }));
+    a.download = `tracker-dismissals-${dayToISO(todayDay())}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    notice("If no download started, use Copy text and save it as a .json file.");
+  } catch { notice("Downloads are blocked here. Use Copy text instead.", true); }
+}
+async function copyDismissals() {
+  const ta = $("#dismissText");
+  ta.select();
+  try { await navigator.clipboard.writeText(ta.value); notice("Copied."); }
+  catch { try { document.execCommand("copy"); notice("Copied."); } catch { notice("Select the text and copy it with Ctrl/Cmd+C.", true); } }
+}
+function openImportDialog() {
+  dialog(`<h3>Import dismissals</h3>
+    <p>Choose a dismissals <span class="mono">.json</span> file, or paste its text below. Imported dismissals are added to yours.</p>
+    <p><button data-action="dismiss-import-file">Choose file…</button></p>
+    <textarea id="importText" rows="10" placeholder="Paste exported dismissals here"></textarea>
+    <div class="dialog-actions"><button class="primary" data-action="dismiss-import-text">Import pasted text</button><span class="spacer"></span><button data-action="close-dialog">Close</button></div>`);
+}
+function dialog(html) {
+  $("#dialogRoot").innerHTML = html ? `<div class="panel-backdrop" data-action="close-dialog"></div><div class="dialog" role="dialog" aria-modal="true">${html}</div>` : "";
+}
+async function importDismissals(file) {
+  return importDismissalsText(await file.text(), file.name);
+}
+function importDismissalsText(text, name = "pasted text") {
+  const file = { name };
+  try {
+    const data = JSON.parse(text);
+    if (data?.type !== "marketing-tracker-dismissals" || !Array.isArray(data.dismissals)) throw new Error("not a dismissals file");
+    let added = 0;
+    for (const d of data.dismissals) {
+      if (!d.fingerprint) continue;
+      const { fingerprint, ...rest } = d;
+      if (!state.dismissals.has(fingerprint)) added++;
+      state.dismissals.set(fingerprint, rest);
+    }
+    saveDismissals();
+    render();
+    const matching = data.dismissals.filter(d => state.data.issues.some(i => i.fingerprint === d.fingerprint)).length;
+    dialog("");
+    notice(`Imported ${data.dismissals.length} dismissal${data.dismissals.length === 1 ? "" : "s"} from ${esc(file.name)} (${added} new; ${matching} match current issues).`);
+  } catch (e) {
+    notice(`Couldn't import ${esc(file.name)}: ${esc(e.message)}. Expected a file made with Export dismissals.`, true);
+  }
+}
+
+// Marker for a row's issues: active error / active warning / a dismissed error only.
+function rowIssueState(r) {
+  const act = activeIssues(r._issues);
+  if (act.some(i => i.severity === "error")) return "error";
+  if (act.length) return "warning";
+  if (r._issues.some(i => i.severity === "error")) return "dismissed";
+  return "";
+}
+function issueDot(r) {
+  const s = rowIssueState(r);
+  return s ? `<span class="idot ${s}" title="${s === "dismissed" ? "Has a dismissed error" : `Has ${s}s`}"></span>` : "";
+}
+
+function issueRowHTML(i, sameType) {
+  const where = `${esc(i.source)}${i.sheetRow ? ` <span class="muted">· row ${i.sheetRow}</span>` : ` <span class="muted">· file</span>`}`;
+  const target = i.rowKey ? `data-row="${esc(i.rowKey)}"` : i.day != null ? `data-day="${i.day}"` : "";
+  const form = state.dismissForm && state.dismissForm.fingerprints.includes(i.fingerprint) && state.dismissForm.anchor === i.fingerprint;
+  return `<tr class="${target ? "clickable" : ""}" ${target}>
+      <td><span class="sev ${i.severity}">${i.severity === "error" ? "Error" : "Warning"}</span></td>
+      <td style="white-space:nowrap">${where}</td>
+      <td class="mono">${esc(i.id)}</td>
+      <td>${esc(i.message)}</td>
+      <td class="issue-actions">${editButton(i.sourceIdx, i.sheetRow, "Edit in sheet", true)}
+        <button class="btn btn-sm" data-action="dismiss" data-fp="${esc(i.fingerprint)}">Dismiss</button>
+        ${sameType > 1 ? `<button class="btn btn-sm" data-action="dismiss-type" data-fp="${esc(i.fingerprint)}" title="${esc(ISSUE_TYPES[i.code] || i.code)}">All ${sameType} like this</button>` : ""}</td>
+    </tr>${form ? `<tr class="dismiss-form"><td colspan="5">
+      <label>${state.dismissForm.fingerprints.length > 1 ? `Dismiss all ${state.dismissForm.fingerprints.length} “${esc(ISSUE_TYPES[i.code] || i.code)}” ${i.severity}s showing now.` : `Dismiss this ${i.severity}.`}
+      Note (optional): <input id="dismissNote" type="text" placeholder="e.g. Intentional: standalone occasion" maxlength="200"></label>
+      <button class="btn btn-sm primary" data-action="dismiss-confirm">Dismiss</button>
+      <button class="btn btn-sm" data-action="dismiss-cancel">Cancel</button>
+      ${state.dismissForm.fingerprints.length > 1 ? `<span class="faint">New issues of this type will still show.</span>` : ""}</td></tr>` : ""}`;
+}
+
+/* ---------- Weekly view ---------- */
+
+const TIER_ORDER = [MOMENT, BRAND, TACTICAL];
+const TIER_PLURAL = { [MOMENT]: "Seasonal Moments", [BRAND]: "Brand Campaigns", [TACTICAL]: "Tactical Campaigns" };
+
+function prioChip(r) {
+  return r.priority ? `<span class="chip prio ${r._bad_priority ? "bad" : ""}" title="Priority">${esc(r.priority)}</span>` : "";
+}
+function statusChip(status) {
+  const known = STATUS_LABELS.includes(status);
+  return `<span class="chip st-${known ? status.toLowerCase() : "none"}">${esc(status || "No status")}</span>`;
+}
+
+function weekCard(r, ws, we, kind) {
+  const p = r._parent ? state.data.byKey.get(r._parent) : null;
+  let when;
+  if (kind === "launching") {
+    when = `Launches <b>${fmtDayShort(r._start)}</b>` +
+      (r._end === r._start ? " · one day" : r._end <= we ? ` · ends ${fmtDayShort(r._end)}` : ` · runs to ${fmtDay(r._end)}`);
+  } else if (kind === "ending") {
+    when = `Ends <b>${fmtDayShort(r._end)}</b> · started ${fmtDay(r._start)}`;
+  } else {
+    when = `Since ${fmtDay(r._start)} · until <b>${fmtDay(r._end)}</b>`;
+  }
+  const facts = [
+    `<span class="vdot" style="background:${verticalColor(r.vertical)}"></span>${esc(r.vertical || "No vertical")}`,
+    r.campaign_type ? esc(r.campaign_type) : "",
+    `Owner: ${r.owner ? `<b>${esc(r.owner)}</b>` : `<span class="faint">none</span>`}`,
+  ].filter(Boolean).join(" · ");
+  let parent = "";
+  if (p) parent = `↳ Parent: ${esc(p.name || p.id)}`;
+  else if (r.parent_id) parent = `↳ Parent: <span class="bad-value">${esc(r.parent_id)}</span> (not found)`;
+  else if (r.tier !== MOMENT) parent = `↳ <span class="faint">No parent</span>`;
+  return `<button class="wk-card" data-row="${esc(r._key)}" style="--c:${verticalColor(r.vertical)}">
+    <div class="t"><span class="name">${issueDot(r)}${esc(barName(r))}</span><span class="chips">${prioChip(r)}${statusChip(r.status)}</span></div>
+    <div class="meta">${when}${r._tentative ? ` · <span class="tent">date tentative</span>` : ""}</div>
+    <div class="meta">${facts}</div>
+    <div class="meta">Channels: ${r._channels.length ? esc(r._channels.join(", ")) : `<span class="faint">none</span>`}</div>
+    ${parent ? `<div class="parent">${parent}</div>` : ""}
+  </button>`;
+}
+
+function weekSection(items, ws, we, kind) {
+  let html = "";
+  const tiers = [...TIER_ORDER, null];
+  for (const tier of tiers) {
+    const inTier = items.filter(r => tier ? r.tier === tier : !TIER_ORDER.includes(r.tier));
+    if (!inTier.length) continue;
+    html += `<div class="wk-tier">${tier ? TIER_PLURAL[tier] : "Unclassified (missing or invalid tier)"}</div>`;
+    const verticals = uniqueSorted(inTier.map(r => r.vertical || "(no vertical)"), ALLOWED.vertical);
+    for (const v of verticals) {
+      const list = inTier.filter(r => (r.vertical || "(no vertical)") === v)
+        .sort((a, b) => a._start - b._start || a._end - b._end || barName(a).localeCompare(barName(b)));
+      if (tier !== MOMENT) html += `<div class="wk-vertical"><span class="vdot" style="background:${verticalColor(v)}"></span>${esc(v)}</div>`;
+      html += list.map(r => weekCard(r, ws, we, kind)).join("");
+    }
+  }
+  return html;
+}
+
+function renderWeek() {
+  const ws = weekStart(state.cursor), we = ws + 6;
+  const endDate = dayToDate(we);
+  $("#weekTitle").textContent = `Week of ${fmtDayShort(ws)}`;
+  $("#weekRange").textContent = `${fmtDayShort(ws)} – ${fmtDayShort(we)} ${endDate.getUTCFullYear()}`;
+  $("#weekJump").value = dayToISO(state.cursor);
+
+  renderWeekKpi(ws);
+  const rows = state.data.rows.filter(passes);
+  const dated = rows.filter(r => r._start !== null && r._end !== null);
+  // Each initiative lands in exactly one section.
+  const sections = [
+    ["launching", "Launching this week", dated.filter(r => r._start >= ws && r._start <= we), "Nothing launching this week"],
+    ["live", "Live this week", dated.filter(r => r._start < ws && r._end > we), "Nothing running through this week"],
+    ["ending", "Ending this week", dated.filter(r => r._start < ws && r._end >= ws && r._end <= we), "Nothing ending this week"],
+  ];
+  $("#weekBody").innerHTML = sections.map(([kind, title, items, empty]) => `
+    <div class="week-col">
+      <h3>${title} <span class="muted">${items.length}</span></h3>
+      ${items.length ? weekSection(items, ws, we, kind) : `<div class="wk-empty">${empty}</div>`}
+    </div>`).join("");
+  renderUndatedNote("#weekNote", rows);
+}
+
+function renderUndatedNote(sel, rows) {
+  const undated = rows.filter(r => r._start === null || r._end === null);
+  $(sel).innerHTML = undated.length
+    ? `${undated.length} initiative${undated.length === 1 ? " isn't" : "s aren't"} shown because of missing or invalid dates:
+       ${undated.map(r => `<button class="link" data-row="${esc(r._key)}">${esc(r.id || barName(r))}</button>`).join(", ")}. See Data issues.`
+    : "";
+}
+
+/* ---------- Side panel ---------- */
+
+function openPanel(key) {
+  state.panelBackDay = state.panelDay ?? (state.panelKey ? state.panelBackDay : null);
+  state.panelDay = null;
+  state.panelKey = key;
+  renderPanel();
+}
+function closePanel() { state.panelKey = null; state.panelDay = null; state.panelBackDay = null; renderPanel(); }
+
+function relCard(r) {
+  const dates = r._start !== null && r._end !== null ? `${fmtDay(r._start)} – ${fmtDay(r._end)}` : "invalid dates";
+  return `<button class="rel" data-row="${esc(r._key)}" style="--c:${verticalColor(r.vertical)}">
+    <span class="grow"><strong>${esc(barName(r))}</strong>
+      <div class="sub">${[r.tier, r.vertical, dates].filter(Boolean).map(esc).join(" · ")}</div>
+      <div class="sub faint">${esc(r._source)} · row ${r._sheetRow}</div></span>
+    ${statusChip(r.status)}</button>`;
+}
+
+function renderPanel() {
+  const root = $("#panelRoot");
+  if (state.panelDay != null && state.data) { renderDayPanel(root); return; }
+  const r = state.panelKey && state.data ? state.data.byKey.get(state.panelKey) : null;
+  if (!r) { root.innerHTML = ""; return; }
+  const { byKey } = state.data;
+  const p = r._parent ? byKey.get(r._parent) : null;
+  const children = r._children.map(k => byKey.get(k)).sort((a, b) => (a._start ?? 1e9) - (b._start ?? 1e9) || barName(a).localeCompare(barName(b)));
+  const bad = f => r[`_bad_${f}`];
+  const val = (f, text = r[f]) => text ? (bad(f) ? `<span class="bad-value">${esc(text)}</span>` : esc(text)) : `<span class="faint">—</span>`;
+  const days = r._start !== null && r._end !== null ? r._end - r._start + 1 : null;
+  const textBlock = (label, f) => {
+    const v = r[f];
+    let body;
+    if (!v) body = `<p class="text empty">Not filled in</p>`;
+    else if (f === "top_highlights" && v.includes(";")) body = `<ul class="bullets">${v.split(";").map(s => s.trim()).filter(Boolean).map(s => `<li>${esc(s)}</li>`).join("")}</ul>`;
+    else body = `<p class="text">${esc(v)}</p>`;
+    return `<h4>${label}</h4>${body}`;
+  };
+
+  root.innerHTML = `
+    <div class="panel-backdrop" data-action="close-panel"></div>
+    <aside class="panel" role="dialog" aria-modal="true" aria-labelledby="panelTitle">
+      <div class="panel-head" style="--c:${verticalColor(r.vertical)}">
+        <div class="top">
+          <span class="chip tier">${esc(r.tier || "No tier")}</span>${prioChip(r)}${statusChip(r.status)}${r._tentative ? `<span class="chip tent">Date tentative</span>` : ""}
+          <button class="close" data-action="close-panel" aria-label="Close">×</button>
+        </div>
+        ${state.panelBackDay != null ? `<button class="link" data-day="${state.panelBackDay}">← Back to ${fmtDayShort(state.panelBackDay)}</button>` : ""}
+        <h2 id="panelTitle">${esc(barName(r))}</h2>
+        <div class="muted"><span class="mono">${esc(r.id || "no id")}</span> · ${esc(r._source)}, row ${r._sheetRow}</div>
+      </div>
+      <div class="panel-body">
+        <dl>
+          <dt>Vertical</dt><dd>${r.vertical ? `<span class="vdot" style="background:${verticalColor(r.vertical)}"></span>` : ""}${val("vertical")}</dd>
+          ${r.sub_vertical ? `<dt>Sub-vertical</dt><dd>${esc(r.sub_vertical)}</dd>` : ""}
+          ${r.tier === MOMENT ? `<dt>Relevant to</dt><dd>${r._relevantAll && !r._relevant.size ? `<span class="ch">All verticals</span>` : ""}${[...r._relevant].map(v => `<span class="ch"><span class="vdot" style="background:${verticalColor(v)}"></span>${esc(v)}</span>`).join("")}${r._audiences.map(a => `<span class="ch info" title="Audience, not a campaign vertical">${esc(a)}</span>`).join("")}</dd>` : ""}
+          <dt>${r.tier === MOMENT ? "Moment type" : "Campaign type"}</dt><dd>${val("campaign_type")}</dd>
+          <dt>Priority</dt><dd>${val("priority")}</dd>
+          <dt>Dates</dt><dd>${r._start !== null ? fmtDayShort(r._start) + " " + dayToDate(r._start).getUTCFullYear() : val("start_date")} – ${r._end !== null ? fmtDayShort(r._end) + " " + dayToDate(r._end).getUTCFullYear() : val("end_date")}${days ? ` <span class="muted">(${days} day${days === 1 ? "" : "s"})</span>` : ""}</dd>
+          ${r.date_confidence || r.tier === MOMENT ? `<dt>Date confidence</dt><dd>${val("date_confidence")}${r._tentative ? ` <span class="chip tent">Date tentative</span>` : ""}</dd>` : ""}
+          <dt>Owner</dt><dd>${val("owner")}</dd>
+          <dt>Channels</dt><dd>${r._channels.length ? r._channels.map(c => `<span class="ch">${esc(c)}</span>`).join("") : `<span class="faint">—</span>`}</dd>
+          <dt>Budget</dt><dd>${r._budget !== null ? `QAR ${r._budget.toLocaleString("en-US")}` : r.budget_qar ? `<span class="bad-value">${esc(r.budget_qar)}</span>` : `<span class="faint">—</span>`}</dd>
+          <dt>Source</dt><dd>${esc(r._source)} · row ${r._sheetRow}</dd>
+        </dl>
+        <div class="panel-actions">${editButton(r._sourceIdx, r._sheetRow)}
+        ${r._start !== null && r._end !== null ? `<button data-action="locate" data-key="${esc(r._key)}">Show on month roadmap</button>` : ""}</div>
+
+        ${r._issues.length ? `<h4>Data issues (${activeIssues(r._issues).length}${r._issues.length > activeIssues(r._issues).length ? ` + ${r._issues.length - activeIssues(r._issues).length} dismissed` : ""})</h4>${r._issues.map(i => `<div class="issue ${isDismissed(i) ? "is-dismissed" : ""}"><span class="sev ${i.severity}">${i.severity === "error" ? "Error" : "Warning"}</span><span>${esc(i.message)}${isDismissed(i) ? ` <em class="faint">Dismissed${state.dismissals.get(i.fingerprint).note ? `: ${esc(state.dismissals.get(i.fingerprint).note)}` : ""}</em>` : ""}</span></div>`).join("")}` : ""}
+
+        <h4>Parent</h4>
+        ${p ? relCard(p) : r.parent_id ? `<p class="text"><span class="bad-value">${esc(r.parent_id)}</span> doesn't match any loaded id.</p>` : `<p class="text empty">${r.tier === MOMENT ? "Seasonal moments have no parent" : "No parent"}</p>`}
+
+        <h4>Children (${children.length})</h4>
+        ${children.length ? children.map(relCard).join("") : `<p class="text empty">No initiatives link to this one</p>`}
+
+        ${textBlock("Objective", "objective")}
+        ${textBlock("Brief", "brief")}
+        ${textBlock("Target audience", "target_audience")}
+        ${textBlock("Goal", "goal")}
+        ${textBlock("KPIs", "kpis")}
+        ${textBlock("Key message", "key_message")}
+        ${textBlock("Top highlights", "top_highlights")}
+        ${textBlock("Notes", "notes")}
+      </div>
+    </aside>`;
+  root.querySelector(".close").focus({ preventScroll: true });
+}
+
+function locate(key) {
+  const r = state.data.byKey.get(key);
+  if (!r || r._start === null) return;
+  state.panelKey = null;
+  state.view = "month";
+  const visibleStart = r._start;
+  state.cursor = visibleStart;
+  render();
+  const bar = document.querySelector(`.bar[data-row="${CSS.escape(key)}"]`);
+  if (bar) {
+    bar.scrollIntoView({ block: "center", behavior: "smooth" });
+    bar.classList.remove("pulse"); void bar.offsetWidth; bar.classList.add("pulse");
+  }
+}
+
+/* ---------- Print ---------- */
+
+const PAPER_WIDTH_MM = { A4: 297, A3: 420 };
+const PRINT_MARGIN_MM = 10;
+
+function applyPaperSize() {
+  const size = $("#paperSize").value;
+  let el = document.getElementById("pageSize");
+  if (!el) { el = document.createElement("style"); el.id = "pageSize"; document.head.appendChild(el); }
+  el.textContent = `@page { size: ${size} landscape; margin: ${PRINT_MARGIN_MM}mm; }`;
+  try { localStorage.setItem("marketingTracker.paper", size); } catch { /* ignore */ }
+}
+
+function renderPrintHeader() {
+  let title;
+  if (state.view === "week") {
+    const ws = weekStart(state.cursor);
+    title = `Marketing plan · Week of ${fmtDayShort(ws)} ${dayToDate(ws).getUTCFullYear()}`;
+  } else if (state.view === "month") {
+    const [y, m] = cursorMonth();
+    title = `Marketing plan · ${MONTHS_LONG[m]} ${y}`;
+  } else title = "Marketing plan · All initiatives";
+  const parts = filterParts();
+  $("#printHeader").innerHTML = `
+    <h1>${esc(title)}</h1>
+    <div class="sub">${parts.length ? esc(parts.join(" · ")) + "<br>" : ""}
+      Sources: ${esc(state.data.sources.map(s => s.label).join(", "))}<br>
+      Printed ${fmtDay(todayDay())}</div>`;
+}
+
+window.addEventListener("beforeprint", () => {
+  // Re-pack bars for the paper width so labels beside bars don't collide.
+  const mm = PAPER_WIDTH_MM[$("#paperSize").value] - 2 * PRINT_MARGIN_MM;
+  state.printWidth = Math.floor(mm / 25.4 * 96);
+  if (state.view === "month" && state.data?.rows.length) renderMonth();
+});
+window.addEventListener("afterprint", () => {
+  state.printWidth = null;
+  if (state.view === "month" && state.data?.rows.length) renderMonth();
+});
+
+/* ---------- Events ---------- */
+
+document.addEventListener("click", e => {
+  if (state.openMenu && !e.target.closest(".ms")) { state.openMenu = null; renderFilters(); }
+  if (e.target.closest("a[href]")) return;   // links (Edit in sheet) open on their own
+  const t = e.target.closest("[data-action],[data-view],[data-toggle],[data-sev],[data-row],[data-day],[data-nav],[data-group]");
+  if (!t) return;
+  const a = t.dataset.action;
+  if (a === "pick") pickFiles();
+  else if (a === "clear") clearData();
+  else if (a === "reload") reloadData();
+  else if (a === "close-notice") $("#notice").classList.add("hidden");
+  else if (a === "dismiss" || a === "dismiss-type") {
+    const i = state.data.issues.find(x => x.fingerprint === t.dataset.fp);
+    const fps = a === "dismiss" ? [i.fingerprint] : activeIssues(state.data.issues).filter(x => x.code === i.code && x.severity === i.severity).map(x => x.fingerprint);
+    state.dismissForm = { anchor: i.fingerprint, fingerprints: fps };
+    renderIssues();
+  }
+  else if (a === "dismiss-confirm") dismissIssues(state.dismissForm.fingerprints, $("#dismissNote")?.value.trim());
+  else if (a === "dismiss-cancel") { state.dismissForm = null; renderIssues(); }
+  else if (a === "restore") restoreIssue(t.dataset.fp);
+  else if (a === "clean-dismissals") cleanStaleDismissals();
+  else if (a === "export-dismissals") exportDismissals();
+  else if (a === "import-dismissals") openImportDialog();
+  else if (a === "dismiss-import-file") $("#dismissImport").click();
+  else if (a === "dismiss-import-text") importDismissalsText($("#importText").value);
+  else if (a === "dismiss-download") downloadDismissals();
+  else if (a === "dismiss-copy") copyDismissals();
+  else if (a === "close-dialog") dialog("");
+  else if (t.dataset.action === "today") { state.cursor = todayDay(); render(); }
+  else if (t.dataset.action === "close-panel") closePanel();
+  else if (t.dataset.action === "locate") locate(t.dataset.key);
+  else if (t.dataset.action === "print") { if (state.view === "data") { state.view = "month"; render(); } window.print(); }
+  else if (t.dataset.action === "clear-filters") { state.filters = defaultFilters(); render(); }
+  else if (t.dataset.action === "all-verticals") { state.filters.verticals = null; render(); }
+  else if (t.dataset.nav) { step(+t.dataset.nav); }
+  else if (t.dataset.group) {
+    const k = t.dataset.group;
+    state.collapsed.has(k) ? state.collapsed.delete(k) : state.collapsed.add(k);
+    render();
+  }
+  else if (t.dataset.view) { state.view = t.dataset.view; render(); }
+  else if (t.dataset.toggle) $(`#${t.dataset.toggle}`).classList.toggle("collapsed");
+  else if (t.dataset.sev) { state.issueFilter = t.dataset.sev; renderIssues(); }
+  else if (t.dataset.row) openPanel(t.dataset.row);
+  else if (t.dataset.day) openDay(+t.dataset.day);
+});
+$("#dismissImport").addEventListener("change", e => { if (e.target.files[0]) importDismissals(e.target.files[0]); e.target.value = ""; });
+document.addEventListener("keydown", e => {
+  if (e.target.id === "dismissNote" && e.key === "Enter") { e.preventDefault(); dismissIssues(state.dismissForm.fingerprints, e.target.value.trim()); }
+});
+document.addEventListener("toggle", e => {
+  if (e.target.matches?.("[data-dismissed-box]")) state.dismissedOpen = e.target.open;
+}, true);
+$("#filePicker").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
+
+function step(dir) {
+  if (state.view === "week") state.cursor += 7 * dir;
+  else { const [y, m] = cursorMonth(); state.cursor = dayFromYMD(y, m + dir, 1); }
+  render();
+}
+$("#weekJump").addEventListener("change", e => {
+  const d = parseISODate(e.target.value || "");
+  if (d !== null) { state.cursor = d; render(); }
+});
+$("#paperSize").addEventListener("change", applyPaperSize);
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  if ($("#dialogRoot").innerHTML) dialog("");
+  else if (state.panelKey || state.panelDay != null) closePanel();
+});
+$("#monthJump").addEventListener("change", e => {
+  const [y, m] = (e.target.value || "").split("-").map(Number);
+  if (y && m) { state.cursor = dayFromYMD(y, m - 1, 1); render(); }
+});
+document.addEventListener("keydown", e => {
+  const g = e.target.closest?.("[data-group]");
+  if (g && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); g.click(); }
+});
+// Hovering a seasonal moment highlights its band behind the campaigns
+document.addEventListener("mouseover", e => {
+  const m = e.target.closest?.("[data-moment]");
+  document.querySelectorAll(".band.hl").forEach(b => b.classList.remove("hl"));
+  if (m) document.querySelector(`.band[data-band="${CSS.escape(m.dataset.moment)}"]`)?.classList.add("hl");
+});
+let resizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (state.view === "month" && state.data?.rows.length) renderMonth(); }, 120);
+});
+
+let dragDepth = 0;
+document.addEventListener("dragenter", e => { if (e.dataTransfer?.types.includes("Files")) { dragDepth++; document.body.classList.add("dragging"); } });
+document.addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) document.body.classList.remove("dragging"); });
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => {
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging");
+  if (!e.dataTransfer?.files?.length) return;
+  const files = [...e.dataTransfer.files];
+  // Ask for file handles while the drop event is live (Chrome/Edge), so Reload can re-read them.
+  const pending = [...e.dataTransfer.items].filter(i => i.kind === "file" && i.getAsFileSystemHandle).map(i => i.getAsFileSystemHandle().catch(() => null));
+  Promise.all(pending).then(hs => addFiles(files, new Map(hs.filter(h => h && h.kind === "file").map(h => [h.name, h]))));
+});
+
+/* ---------- Start ---------- */
+
+try { const paper = localStorage.getItem("marketingTracker.paper"); if (paper) $("#paperSize").value = paper; } catch { /* ignore */ }
+applyPaperSize();
+handleStore.all().then(h => { state.handles = h; });
+
+try {
+  if (MODE === "appsScript") {
+    loadFromAppsScript().catch(e => showScriptError(String(e && (e.stack || e.message) || e)));
+  } else if (MODE === "urls") {
+    render();
+    loadUrls().catch(e => showScriptError(String(e && (e.stack || e.message) || e)));
+  } else {
+    const saved = storageGet();
+    if (Array.isArray(saved)) state.sources = saved.map(s => ({ ...s, origin: "file" }));
+    rebuild();
+  }
+} catch (e) {
+  showScriptError(String(e && (e.stack || e.message) || e));
+}
+</script>
+</body>
+</html>

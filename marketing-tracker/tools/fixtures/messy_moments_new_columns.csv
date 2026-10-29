@@ -1,0 +1,4 @@
+id,name,tier,parent_id,vertical,relevant_verticals,sub_vertical,campaign_type,priority,date_confidence,start_date,end_date,status,owner,channels,objective,brief,target_audience,goal,kpis,key_message,top_highlights,budget_qar,notes
+SM-901,Priority uses campaign scale,Seasonal Moment,,Cross-vertical,All,,Any MarCom type is fine,P1,Confirmed,2026-11-15,2026-11-15,Planning,,,,,,,,,,,
+SM-902,Bad date confidence,Seasonal Moment,,Cross-vertical,Restaurants,,National occasion,T2,Maybe,2026-11-16,2026-11-16,Planning,,,,,,,,,,,
+SM-903,Typo in relevant verticals,Seasonal Moment,,Cross-vertical,Resturants;City,,International day,T3,Tentative,2026-11-17,2026-11-18,Planning,,,,,,,,,,,
